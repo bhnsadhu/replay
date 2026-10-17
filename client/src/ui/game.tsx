@@ -32,19 +32,28 @@ interface AnswerTileProps {
   state: AnswerState;
   /** Desktop only: keyboard shortcut shown on the tile. */
   keyHint?: string;
+  /** Reveal on the TV: initials of who picked this, shown instead of the artist. */
+  picks?: string[];
+  /** Short label on the right, e.g. "CORRECT". */
+  tag?: string;
   onPick?: (letter: Letter) => void;
 }
 
 /** TV / desktop answer tile with a neon border in the answer color. */
-export function AnswerTile({ option, state, keyHint, onPick }: AnswerTileProps) {
+export function AnswerTile({ option, state, keyHint, picks, tag, onPick }: AnswerTileProps) {
   const content = (
     <>
       <span className="answer-tile__letter display">{option.letter}</span>
       <span className="answer-tile__text">
         <span className="answer-tile__title">{option.title}</span>
-        <span className="answer-tile__artist">{option.artist}</span>
+        {picks ? (
+          <span className="answer-tile__picks">{picks.length > 0 ? picks.join('  ') : '–'}</span>
+        ) : (
+          <span className="answer-tile__artist">{option.artist}</span>
+        )}
       </span>
       {keyHint && <span className="answer-tile__key">{keyHint}</span>}
+      {tag && <span className="answer-tile__tag">{tag}</span>}
     </>
   );
 

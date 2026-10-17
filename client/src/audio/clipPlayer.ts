@@ -78,6 +78,13 @@ export class ClipPlayer {
     );
   }
 
+  /** For devices that don't play the clip (phones in TV mode): just track when it starts. */
+  markStart(localStartAt: number): void {
+    this.stop();
+    this.playingAt = null;
+    this.localStartAt = localStartAt;
+  }
+
   /** Time since the clip started, measured on this device (PLAN.md §7). */
   elapsedMs(): number {
     if (this.playingAt !== null) return performance.now() - this.playingAt;
