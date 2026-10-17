@@ -26,7 +26,7 @@ Inspiration: [Mixtape](https://mixtape-game.fly.dev/), a single global "radio st
 | Client | Vite + React + TypeScript |
 | Server | Node + `ws`, rooms held in memory, server decides everything |
 | Shared | One `shared/` package with message types and constants |
-| Hosting | One Fly.io app that serves the site and the WebSocket |
+| Hosting (free) | Website on **Vercel** (Hobby). Game server on **Render** free tier. |
 | Music | Deezer public API (fetched on the server, audio played through our server) |
 | Domain | `replay.bhanusadhu.com` (subdomain of a domain the owner already has). Invite links: `replay.bhanusadhu.com/WXQK` |
 | Workflow | Commit and push to `main` after each finished chunk of work |
@@ -159,7 +159,15 @@ replay/
   client/   Vite React app: screens/, components/, net/ (socket, clock sync), audio/
 ```
 
-One Fly app: the Node server serves `client/dist` as static files, `/ws` for the WebSocket, and `/audio/:roundId` for clips.
+Two free deployments:
+
+- **Website (`client/`)** is built and served by Vercel. It reads the game server's address from `VITE_SERVER_URL`.
+- **Game server (`server/`)** runs on Render's free tier. It serves `/ws` (WebSocket), `/audio/:roundId` (clips) and `/health`. It only accepts connections from the website's address.
+- **Waking up:** after 15 minutes with no traffic, Render puts the free server to sleep, and waking it takes about a minute.
+  - On load, the website calls `/health` and shows a "WARMING UP THE CABINET…" screen until the server answers.
+  - Live connections keep the server awake during play.
+  - Rooms are lost only when the server sleeps, which only happens when nobody is connected.
+- **Upgrade path** if the wake-up wait becomes a problem: a paid Render instance, or a move to Cloudflare Workers + Durable Objects.
 
 ### Room state machine (server-owned)
 
@@ -228,7 +236,7 @@ Each milestone ends with something you can try. Don't start the next one until t
 
 | # | Milestone | Done when |
 |---|---|---|
-| M0 | Workspace scaffold (`shared`/`server`/`client`), TypeScript strict, lint, test runner, `fly.toml` | `npm run dev` serves a blank page and the ws echo works |
+| M0 | Workspace scaffold (`shared`/`server`/`client`), TypeScript strict, lint, test runner, `render.yaml` + Vercel config | `npm run dev` serves a blank page and the ws echo works |
 | M1 | Design system + static screens | Round TV and phone match the canvas side by side; tokens and components from section 4 exist |
 | M2 | Music + single-player round | Desktop plays a real 15s clip through `/audio`, shows 4 options, scores with section 6, reveals |
 | M3 | Rooms + party mode | TV hosts, sound gate works, 2+ phones join by code, pick initials, ready up, host starts, full 10-round game on TV + phones |
@@ -236,7 +244,7 @@ Each milestone ends with something you can try. Don't start the next one until t
 | M5 | Remote + public | `sound: "all"` rooms work with no TV; public room runs nonstop sets with top 10 + your row |
 | M6 | Resilience | Reconnect within 60s keeps seat/score, host handoff, TV drop pauses, late join, initials dedupe + blocklist |
 | M7 | Polish | Glitch reveal, rewind transition, reduce effects, options screen, share score card, sound effects, a11y pass |
-| M8 | Ship | Deployed on Fly, domain connected, basic rate limits on joins/guesses |
+| M8 | Ship | Website live on Vercel, server live on Render, both domains connected, warm-up screen works, basic rate limits on joins/guesses |
 
 ---
 
@@ -258,4 +266,4 @@ Defaults (chosen; the owner can override any time):
 
 Open (needed from the owner later):
 - **M3:** test on real phones (iPhone Safari especially) on the same Wi-Fi as the dev laptop.
-- **M8:** a Fly.io account with `flyctl` logged in, and access to DNS for `bhanusadhu.com` to point `replay` at Fly.
+- **M8:** a Render account (sign up with GitHub). DNS for `bhanusadhu.com` is on Vercel, so both domain records are added there.
