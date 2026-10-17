@@ -49,15 +49,34 @@ export const SAMPLE_REVEAL: Reveal = {
   roundId: 'sample',
   correct: 'B',
   track: { title: 'Take On Me', artist: 'a-ha', year: null },
+  picks: { A: ['PRI'], B: ['MAY', 'DEV', 'SAM'], C: ['JOR'], D: [] },
+  board: [
+    { id: 'p1', initials: 'MAY', score: 7500, delta: 1300, streak: 5, rank: 1 },
+    { id: 'p2', initials: 'DEV', score: 7360, delta: 1460, streak: 4, rank: 2 },
+    { id: 'p3', initials: 'JOR', score: 4350, delta: 0, streak: 0, rank: 3 },
+    { id: 'p4', initials: 'PRI', score: 3800, delta: 0, streak: 0, rank: 4 },
+    { id: 'p5', initials: 'SAM', score: 3300, delta: 1150, streak: 1, rank: 5 },
+    { id: 'p6', initials: 'LEO', score: 900, delta: 0, streak: 0, rank: 6 },
+  ],
   you: { choice: 'B', elapsedMs: 7200, points: 1460, base: 1000, speed: 260, streakBonus: 200, streak: 4, score: 7360 },
   nextAt: 1,
 };
 
 export const SAMPLE_GAME_OVER: GameOver = {
   t: 'gameOver',
-  score: 11240,
-  correctCount: 7,
-  total: 10,
-  bestStreak: 4,
-  fastestMs: 1400,
+  board: [
+    { id: 'p1', initials: 'MAY', score: 14850, delta: 0, streak: 0, rank: 1 },
+    { id: 'p2', initials: 'DEV', score: 14200, delta: 0, streak: 0, rank: 2 },
+    { id: 'p3', initials: 'JOR', score: 9400, delta: 0, streak: 0, rank: 3 },
+    { id: 'p4', initials: 'PRI', score: 8750, delta: 0, streak: 0, rank: 4 },
+    { id: 'p5', initials: 'SAM', score: 6100, delta: 0, streak: 0, rank: 5 },
+    { id: 'p6', initials: 'LEO', score: 2300, delta: 0, streak: 0, rank: 6 },
+  ],
+  awards: {
+    bestStreak: { initials: 'MAY', value: 7 },
+    fastest: { initials: 'DEV', ms: 1400 },
+    mostCorrect: { initials: 'MAY', count: 9 },
+    nobodyGot: { title: 'Dreams', artist: 'Fleetwood Mac' },
+  },
+  you: { score: 14200, correctCount: 8, total: 10, bestStreak: 5, fastestMs: 1400, rank: 2 },
 };

@@ -40,6 +40,28 @@ describe('parseClientMessage', () => {
     expect(parseClientMessage(JSON.stringify({ t: 'guess', roundId: 'x'.repeat(80), choice: 'A', elapsedMs: 1 }))).toBeNull();
   });
 
+  it('parses room messages and normalizes codes and initials to uppercase', () => {
+    expect(parseClientMessage('{"t":"room:create","role":"tv"}')).toEqual({ t: 'room:create', role: 'tv' });
+    expect(parseClientMessage('{"t":"room:create","role":"player","initials":"dev"}')).toEqual({
+      t: 'room:create',
+      role: 'player',
+      initials: 'DEV',
+    });
+    expect(parseClientMessage('{"t":"room:join","code":"wxqk","initials":"may"}')).toEqual({ t: 'room:join', code: 'WXQK', initials: 'MAY' });
+    expect(parseClientMessage('{"t":"room:start"}')).toEqual({ t: 'room:start' });
+  });
+
+  it('rejects bad codes, initials and rules', () => {
+    expect(parseClientMessage('{"t":"room:join","code":"WXQ0","initials":"MAY"}')).toBeNull(); // 0 not allowed
+    expect(parseClientMessage('{"t":"room:join","code":"WIQK","initials":"MAY"}')).toBeNull(); // I not allowed
+    expect(parseClientMessage('{"t":"room:join","code":"WXQK","initials":"MA"}')).toBeNull();
+    expect(parseClientMessage('{"t":"room:initials","initials":"D3V"}')).toBeNull();
+    const rules = { rounds: 10, clipSeconds: 15, mix: '90s', sound: 'tv' };
+    expect(parseClientMessage(JSON.stringify({ t: 'room:rules', rules }))).toEqual({ t: 'room:rules', rules });
+    expect(parseClientMessage(JSON.stringify({ t: 'room:rules', rules: { ...rules, rounds: 7 } }))).toBeNull();
+    expect(parseClientMessage(JSON.stringify({ t: 'room:rules', rules: { ...rules, sound: 'loud' } }))).toBeNull();
+  });
+
   it('rejects oversized messages', () => {
     expect(parseClientMessage(JSON.stringify({ t: 'echo', text: 'x'.repeat(5000) }))).toBeNull();
   });

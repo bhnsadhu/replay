@@ -3,6 +3,17 @@
 
 import { isMixId, type MixId } from './constants';
 import { LETTERS, type AnswerOption, type Letter } from './game';
+import {
+  CLIP_CHOICES,
+  ROUND_CHOICES,
+  isInitials,
+  isRoomCode,
+  type BoardEntry,
+  type RoomRole,
+  type RoomRules,
+  type RoomView,
+  type SoundMode,
+} from './room';
 
 export const WS_PATH = '/ws';
 export const AUDIO_PATH = '/audio';
@@ -13,7 +24,19 @@ export type ClientMessage =
   | { t: 'echo'; text: string }
   | { t: 'solo:start'; mix: MixId }
   | { t: 'solo:quit' }
-  | { t: 'guess'; roundId: string; choice: Letter; elapsedMs: number };
+  | { t: 'guess'; roundId: string; choice: Letter; elapsedMs: number }
+  // Rooms
+  | { t: 'room:create'; role: 'tv' }
+  | { t: 'room:create'; role: 'player'; initials: string }
+  | { t: 'room:join'; code: string; initials: string }
+  | { t: 'room:initials'; initials: string }
+  | { t: 'room:ready'; ready: boolean }
+  | { t: 'room:rules'; rules: RoomRules }
+  | { t: 'room:start' }
+  | { t: 'room:kick'; playerId: string }
+  | { t: 'room:end' }
+  | { t: 'room:leave' }
+  | { t: 'tv:soundOn' };
 
 export interface RevealedTrack {
   title: string;
@@ -34,12 +57,30 @@ export interface YourResult {
   score: number;
 }
 
+export interface FinalStats {
+  score: number;
+  correctCount: number;
+  total: number;
+  bestStreak: number;
+  fastestMs: number | null;
+  rank: number;
+}
+
+export interface Awards {
+  bestStreak: { initials: string; value: number } | null;
+  fastest: { initials: string; ms: number } | null;
+  mostCorrect: { initials: string; count: number } | null;
+  nobodyGot: { title: string; artist: string } | null;
+}
+
 export type ServerMessage =
   | { t: 'welcome'; serverTime: number }
   | { t: 'pong'; at: number; serverTime: number }
   | { t: 'echo'; text: string }
   | { t: 'error'; code: ErrorCode; message: string }
   | { t: 'solo:preparing'; mix: MixId }
+  | { t: 'room:state'; room: RoomView; role: RoomRole; you: string | null }
+  | { t: 'room:closed'; reason: string }
   | {
       t: 'roundStart';
       roundId: string;
@@ -53,25 +94,51 @@ export type ServerMessage =
       durationMs: number;
     }
   | { t: 'guessAck'; roundId: string; choice: Letter }
+  | { t: 'lockedIn'; roundId: string; count: number; total: number }
   | {
       t: 'reveal';
       roundId: string;
       correct: Letter;
       track: RevealedTrack;
-      you: YourResult;
+      /** Initials of who picked each letter. */
+      picks: Record<Letter, string[]>;
+      board: BoardEntry[];
+      /** This player's result, or null for the TV. */
+      you: YourResult | null;
       /** Server time when the next round (or game over) comes; null if it's the last. */
       nextAt: number | null;
     }
-  | { t: 'gameOver'; score: number; correctCount: number; total: number; bestStreak: number; fastestMs: number | null };
+  | { t: 'gameOver'; board: BoardEntry[]; awards: Awards; you: FinalStats | null };
 
-export type ErrorCode = 'bad_message' | 'music_unavailable' | 'not_in_game';
+export type ErrorCode =
+  | 'bad_message'
+  | 'music_unavailable'
+  | 'not_in_game'
+  | 'room_not_found'
+  | 'room_full'
+  | 'game_in_progress'
+  | 'not_host'
+  | 'cannot_start';
 
 const MAX_MESSAGE_BYTES = 4096;
 const MAX_ECHO_LENGTH = 200;
-const MAX_ROUND_ID_LENGTH = 64;
+const MAX_ID_LENGTH = 64;
 
 const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isLetter = (v: unknown): v is Letter => typeof v === 'string' && (LETTERS as readonly string[]).includes(v);
+const isId = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= MAX_ID_LENGTH;
+const isSound = (v: unknown): v is SoundMode => v === 'tv' || v === 'all';
+const upper = (v: unknown): unknown => (typeof v === 'string' ? v.toUpperCase() : v);
+
+function parseRules(v: unknown): RoomRules | null {
+  if (typeof v !== 'object' || v === null) return null;
+  const r = v as Record<string, unknown>;
+  const rounds = r.rounds;
+  const clipSeconds = r.clipSeconds;
+  if (!(ROUND_CHOICES as readonly unknown[]).includes(rounds) || !(CLIP_CHOICES as readonly unknown[]).includes(clipSeconds)) return null;
+  if (!isMixId(r.mix) || !isSound(r.sound)) return null;
+  return { rounds: rounds as number, clipSeconds: clipSeconds as number, mix: r.mix, sound: r.sound };
+}
 
 /** Parses and validates a raw client message. Returns null for anything malformed. */
 export function parseClientMessage(raw: string): ClientMessage | null {
@@ -96,12 +163,39 @@ export function parseClientMessage(raw: string): ClientMessage | null {
     case 'solo:quit':
       return { t: 'solo:quit' };
     case 'guess':
-      return typeof msg.roundId === 'string' &&
-        msg.roundId.length <= MAX_ROUND_ID_LENGTH &&
-        isLetter(msg.choice) &&
-        isFiniteNumber(msg.elapsedMs)
+      return isId(msg.roundId) && isLetter(msg.choice) && isFiniteNumber(msg.elapsedMs)
         ? { t: 'guess', roundId: msg.roundId, choice: msg.choice, elapsedMs: msg.elapsedMs }
         : null;
+    case 'room:create': {
+      if (msg.role === 'tv') return { t: 'room:create', role: 'tv' };
+      const initials = upper(msg.initials);
+      return msg.role === 'player' && isInitials(initials) ? { t: 'room:create', role: 'player', initials } : null;
+    }
+    case 'room:join': {
+      const code = upper(msg.code);
+      const initials = upper(msg.initials);
+      return isRoomCode(code) && isInitials(initials) ? { t: 'room:join', code, initials } : null;
+    }
+    case 'room:initials': {
+      const initials = upper(msg.initials);
+      return isInitials(initials) ? { t: 'room:initials', initials } : null;
+    }
+    case 'room:ready':
+      return typeof msg.ready === 'boolean' ? { t: 'room:ready', ready: msg.ready } : null;
+    case 'room:rules': {
+      const rules = parseRules(msg.rules);
+      return rules ? { t: 'room:rules', rules } : null;
+    }
+    case 'room:kick':
+      return isId(msg.playerId) ? { t: 'room:kick', playerId: msg.playerId } : null;
+    case 'room:start':
+      return { t: 'room:start' };
+    case 'room:end':
+      return { t: 'room:end' };
+    case 'room:leave':
+      return { t: 'room:leave' };
+    case 'tv:soundOn':
+      return { t: 'tv:soundOn' };
     default:
       return null;
   }

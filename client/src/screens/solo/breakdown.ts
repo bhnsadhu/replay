@@ -1,10 +1,11 @@
-import type { AnswerOption } from '@replay/shared';
+import type { AnswerOption, Letter, YourResult } from '@replay/shared';
 import type { BreakdownRow, VerdictKind } from '../../ui/result';
-import type { Reveal } from '../../game/useSoloGame';
 
-/** What the reveal says about your answer, shared by the phone and desktop layouts. */
-export function describeResult(reveal: Reveal, options: AnswerOption[], streakBefore: number) {
-  const { you, correct } = reveal;
+/** An empty result, for when the server sends none (e.g. a player who just joined). */
+export const NO_RESULT: YourResult = { choice: null, elapsedMs: null, points: 0, base: 0, speed: 0, streakBonus: 0, streak: 0, score: 0 };
+
+/** What the reveal says about your answer. Shared by every reveal layout (solo, room, desktop, phone). */
+export function describeResult(you: YourResult, correct: Letter, options: AnswerOption[], streakBefore: number) {
   const kind: VerdictKind = you.choice === null ? 'none' : you.choice === correct ? 'correct' : 'wrong';
 
   let rows: BreakdownRow[];

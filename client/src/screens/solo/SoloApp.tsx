@@ -59,7 +59,9 @@ export function SoloApp() {
     }
 
     case 'over':
-      return <SoloOver over={state.over} mix={state.mix} onReplay={() => start(state.mix)} onMenu={quit} />;
+      return state.over.you ? (
+        <SoloOver stats={state.over.you} mix={state.mix} onReplay={() => start(state.mix)} onMenu={quit} />
+      ) : null;
 
     case 'error':
       return (

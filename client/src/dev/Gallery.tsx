@@ -28,7 +28,10 @@ function RoundPhoneDemo() {
 const revealProps = { round: SAMPLE_ROUND_START, reveal: SAMPLE_REVEAL, streakBefore: 3, secondsToNext: 4 };
 const missProps = {
   ...revealProps,
-  reveal: { ...SAMPLE_REVEAL, you: { ...SAMPLE_REVEAL.you, choice: 'A' as const, points: 0, base: 0, speed: 0, streakBonus: 0, streak: 0, score: 5900 } },
+  reveal: {
+    ...SAMPLE_REVEAL,
+    you: { choice: 'A' as const, elapsedMs: 2100, points: 0, base: 0, speed: 0, streakBonus: 0, streak: 0, score: 5900 },
+  },
 };
 
 const SCREENS = {
@@ -40,7 +43,7 @@ const SCREENS = {
   'solo-over': {
     label: 'Solo game over',
     kind: 'phone',
-    render: () => <SoloOver over={SAMPLE_GAME_OVER} mix="80s" onReplay={() => undefined} onMenu={() => undefined} />,
+    render: () => <SoloOver stats={SAMPLE_GAME_OVER.you!} mix="80s" onReplay={() => undefined} onMenu={() => undefined} />,
   },
 } as const;
 

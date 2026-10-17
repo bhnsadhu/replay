@@ -1,9 +1,11 @@
 import { createServer } from 'node:http';
-import { WebSocketServer, type WebSocket } from 'ws';
+import { randomBytes } from 'node:crypto';
+import { WebSocketServer } from 'ws';
 import { AUDIO_PATH, WS_PATH, parseClientMessage, type ServerMessage } from '@replay/shared';
 import { config, isOriginAllowed } from './config';
 import { serveClip } from './audio';
 import { SoloGame } from './solo';
+import { handleRoomMessage, type Session } from './rooms';
 
 const httpServer = createServer((req, res) => {
   const path = new URL(req.url ?? '/', 'http://localhost').pathname;
@@ -39,48 +41,60 @@ httpServer.on('upgrade', (req, socket, head) => {
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
 });
 
-function send(ws: WebSocket, msg: ServerMessage): void {
-  if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
-}
-
 wss.on('connection', (ws) => {
+  const session: Session = {
+    id: randomBytes(6).toString('base64url'),
+    send: (msg: ServerMessage) => {
+      if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
+    },
+    room: null,
+    role: null,
+    playerId: null,
+  };
+
   let solo: SoloGame | null = null;
   const endSolo = () => {
     solo?.dispose();
     solo = null;
   };
 
-  send(ws, { t: 'welcome', serverTime: Date.now() });
+  session.send({ t: 'welcome', serverTime: Date.now() });
 
   ws.on('message', (data) => {
     const msg = parseClientMessage(data.toString());
     if (!msg) {
-      send(ws, { t: 'error', code: 'bad_message', message: 'Message was not understood.' });
+      session.send({ t: 'error', code: 'bad_message', message: 'Message was not understood.' });
       return;
     }
+    if (handleRoomMessage(session, msg)) return;
+
     switch (msg.t) {
       case 'ping':
-        send(ws, { t: 'pong', at: msg.at, serverTime: Date.now() });
+        session.send({ t: 'pong', at: msg.at, serverTime: Date.now() });
         break;
       case 'echo':
-        send(ws, { t: 'echo', text: msg.text });
+        session.send({ t: 'echo', text: msg.text });
         break;
       case 'solo:start':
         endSolo();
-        solo = new SoloGame(msg.mix, (m) => send(ws, m));
+        session.room?.remove(session);
+        solo = new SoloGame(msg.mix, session.send);
         void solo.start();
         break;
       case 'solo:quit':
         endSolo();
         break;
       case 'guess':
-        if (solo) solo.guess(msg);
-        else send(ws, { t: 'error', code: 'not_in_game', message: 'Start a game first.' });
+        if (solo) solo.guess(msg.roundId, msg.choice, msg.elapsedMs);
+        else session.send({ t: 'error', code: 'not_in_game', message: 'Start a game first.' });
         break;
     }
   });
 
-  ws.on('close', endSolo);
+  ws.on('close', () => {
+    endSolo();
+    session.room?.remove(session);
+  });
 });
 
 httpServer.listen(config.port, () => {
