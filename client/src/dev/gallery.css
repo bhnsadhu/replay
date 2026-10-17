@@ -1,0 +1,57 @@
+.gallery {
+  min-height: 100%;
+  padding: 24px max(16px, env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.gallery__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 16px;
+}
+.gallery__toggle {
+  padding: 8px 14px;
+  background: transparent;
+  border: 3px solid var(--line);
+  color: var(--dim);
+  font-size: 22px;
+}
+.gallery__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  align-items: flex-start;
+}
+.gallery__item {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gallery__item figcaption { font-size: 24px; }
+.gallery__frame {
+  border: 2px solid var(--line);
+  overflow: hidden;
+  position: relative;
+}
+.gallery__item--tv {
+  flex: 1 1 640px;
+  min-width: 0;
+}
+.gallery__item--tv .gallery__frame {
+  aspect-ratio: 16 / 9;
+  max-width: 100%;
+}
+.gallery__item--phone .gallery__frame {
+  width: 390px;
+  height: 844px;
+  max-width: 100%;
+}
+.gallery__item--phone .phone {
+  min-height: 100%;
+  height: 100%;
+}

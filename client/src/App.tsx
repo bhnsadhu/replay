@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ClientMessage, ServerMessage } from '@replay/shared';
 import { serverWsUrl } from './net/serverUrl';
+import { Logo, Scanlines, StatusLine } from './ui/frames';
 
 type Status = 'connecting' | 'online' | 'offline';
 
@@ -34,12 +35,14 @@ export function App() {
 
   return (
     <main className="boot">
-      <h1 className="boot-logo">REPLAY</h1>
-      <p className="boot-status" data-status={status}>
+      <Scanlines />
+      <h1 className="sr-only">Replay</h1>
+      <Logo />
+      <StatusLine tone={status === 'online' ? 'good' : 'dim'}>
         {status === 'online' && `SERVER ONLINE${pingMs === null ? '' : ` · ${pingMs} MS`}`}
         {status === 'connecting' && 'CONNECTING…'}
         {status === 'offline' && 'SERVER OFFLINE'}
-      </p>
+      </StatusLine>
     </main>
   );
 }

@@ -1,0 +1,30 @@
+/* Replay design tokens. Source of truth: PLAN.md §4 and the "Replay flow" canvas. */
+:root {
+  color-scheme: dark;
+
+  --bg: #07060f;
+  --ink: #e9e6ff;
+  --dim: #9b97c9;
+  --line: #2a2850;
+  --off: #1b1a33;
+  --white: #ffffff;
+
+  /* Each color has one meaning: answer A–D, plus one secondary role. */
+  --pink: #ff3ea5; /* A, streaks */
+  --cyan: #2de2e6; /* B, room code, links */
+  --yellow: #f9f871; /* C, time, leader, primary action */
+  --green: #7cff6b; /* D, correct, ready */
+
+  --font-display: 'Press Start 2P', ui-monospace, monospace;
+  --font-body: 'VT323', ui-monospace, Menlo, monospace;
+
+  --border: 3px;
+  --touch: 44px;
+
+  --glow-strength: 18px;
+}
+
+[data-letter='A'] { --answer: var(--pink); }
+[data-letter='B'] { --answer: var(--cyan); }
+[data-letter='C'] { --answer: var(--yellow); }
+[data-letter='D'] { --answer: var(--green); }
