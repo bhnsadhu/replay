@@ -85,7 +85,7 @@ export function PhoneTopRow({ context, status, statusText, onOptions }: PhoneTop
         <span className="phone-top__status">
           {vhsGlyph(status)} {statusText ?? vhsWord(status)}
         </span>
-        <OptionsButton onClick={onOptions} />
+        {onOptions && <OptionsButton onClick={onOptions} />}
       </span>
     </div>
   );

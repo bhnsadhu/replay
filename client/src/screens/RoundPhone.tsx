@@ -1,12 +1,12 @@
 import type { AnswerOption, Letter } from '@replay/shared';
 import { Phone, PhoneTopRow, PlayerCard, StatusLine } from '../ui/frames';
 import { AnswerButton, SegmentTimer, type AnswerState } from '../ui/game';
-import { pad2, timerSegments } from './format';
+import { timerSegments } from './format';
 
 export interface RoundPhoneProps {
-  roomCode: string;
-  roundIndex: number;
-  player: { slot: number; initials: string; score: number; streak: number };
+  /** Top-left context, e.g. "WXQK · RND 04" or "SOLO · RND 04". */
+  context: string;
+  player: { label: string; initials: string; score: number; streak: number };
   options: AnswerOption[];
   picked: Letter | null;
   secondsLeft: number;
@@ -16,7 +16,7 @@ export interface RoundPhoneProps {
 }
 
 export function RoundPhone(props: RoundPhoneProps) {
-  const { roomCode, roundIndex, player, options, picked, secondsLeft, clipSeconds, onPick, onOptions } = props;
+  const { context, player, options, picked, secondsLeft, clipSeconds, onPick, onOptions } = props;
 
   const stateFor = (letter: Letter): AnswerState => {
     if (picked === null) return 'idle';
@@ -25,9 +25,9 @@ export function RoundPhone(props: RoundPhoneProps) {
 
   return (
     <Phone>
-      <PhoneTopRow context={`${roomCode} · RND ${pad2(roundIndex)}`} status="play" statusText={`${secondsLeft}s`} onOptions={onOptions} />
+      <PhoneTopRow context={context} status="play" statusText={`${secondsLeft}s`} onOptions={onOptions} />
       <PlayerCard
-        label={`PLAYER ${player.slot}`}
+        label={player.label}
         initials={player.initials}
         rightLabel={player.streak > 0 ? `STREAK x${player.streak}` : 'NO STREAK'}
         rightLabelTone={player.streak > 0 ? 'streak' : 'dim'}
