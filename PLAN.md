@@ -28,7 +28,7 @@ Inspiration: [Mixtape](https://mixtape-game.fly.dev/), a single global "radio st
 | Shared | One `shared/` package with message types and constants |
 | Hosting (free) | Website on **Vercel** (Hobby). Game server on **Render** free tier. |
 | Music | Deezer public API (fetched on the server, audio played through our server) |
-| Domain | `replay.bhanusadhu.com` (subdomain of a domain the owner already has). Invite links: `replay.bhanusadhu.com/WXQK` |
+| Domain | Website: `replay.bhanusadhu.com`. Game server: `replay-api.bhanusadhu.com`. Invite links: `replay.bhanusadhu.com/WXQK` |
 | Workflow | Commit and push to `main` after each finished chunk of work |
 
 ---

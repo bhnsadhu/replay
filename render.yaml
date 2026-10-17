@@ -1,0 +1,16 @@
+# Game server on Render's free tier. See PLAN.md §7.
+services:
+  - type: web
+    name: replay-server
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "24"
+      - key: ALLOWED_ORIGINS
+        value: https://replay.bhanusadhu.com

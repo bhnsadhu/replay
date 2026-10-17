@@ -1,0 +1,49 @@
+/* M0 placeholder styles. The full design system (PLAN.md §4) lands in M1. */
+:root {
+  color-scheme: dark;
+  --bg: #07060f;
+  --ink: #e9e6ff;
+  --dim: #9b97c9;
+  --pink: #ff3ea5;
+  --cyan: #2de2e6;
+  --green: #7cff6b;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-monospace, Menlo, monospace;
+}
+
+.boot {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.boot-logo {
+  margin: 0;
+  font-size: clamp(40px, 10vw, 88px);
+  letter-spacing: 0.1em;
+  text-shadow: -3px 0 var(--pink), 3px 0 var(--cyan);
+}
+
+.boot-status {
+  margin: 0;
+  letter-spacing: 0.15em;
+  color: var(--dim);
+}
+
+.boot-status[data-status='online'] {
+  color: var(--green);
+}
