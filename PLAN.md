@@ -112,9 +112,9 @@ Not drawn yet, but specified by rules: the remote versions of reveal and game ov
 **Hosting**
 - When HOST A ROOM is tapped on a TV or laptop, that screen shows the game and plays the music. The first phone to join becomes host.
 - When HOST A ROOM is tapped on a phone, that phone is the host and `sound` starts as `"all"`.
-- If the host leaves, host passes to the next player by join order.
+- If the host leaves, host passes to the next player by join order. If the host only drops (reload, lost signal), they keep the role for 10 s first.
 - The host phone gets PAUSE, SKIP SONG and END during the game. Tapping the room code copies an invite link.
-- If the TV drops, the room pauses until it reconnects.
+- If the TV drops, the room pauses until it reconnects (the interrupted round replays from the top). The room closes if the TV is gone for 60 s. Abrupt drops are noticed by a 12 s server heartbeat.
 
 **Players**
 - Initials are A–Z, 3 characters. Duplicates get a number (DEV, then DE2…DE9). A blocklist rejects rude words.
