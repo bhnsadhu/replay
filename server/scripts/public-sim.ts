@@ -17,6 +17,9 @@ function player(initials: string) {
   const inbox: ServerMessage[] = [];
   let answer = true;
   const send = (m: ClientMessage) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(m));
+  // Like the real app: ping every 3 s, or the server's heartbeat drops the connection.
+  const ping = setInterval(() => send({ t: 'ping', at: Date.now() }), 3000);
+  ws.on('close', () => clearInterval(ping));
   ws.on('message', (d) => {
     const m = JSON.parse(d.toString()) as ServerMessage;
     inbox.push(m);

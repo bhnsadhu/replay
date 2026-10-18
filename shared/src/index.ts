@@ -4,3 +4,4 @@ export * from './constants';
 export * from './scoring';
 export * from './room';
 export * from './public';
+export * from './blocklist';

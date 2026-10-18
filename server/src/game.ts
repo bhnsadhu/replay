@@ -75,6 +75,10 @@ export class Game {
   private nobodyGot: { title: string; artist: string } | null = null;
   private index = 0;
   private disposed = false;
+  /** Paused mid-round ('round') or between rounds ('between'); null while running. */
+  private paused: 'round' | 'between' | null = null;
+  /** A round that became ready while paused, started on resume. */
+  private pendingStart: PreparedRound | null = null;
 
   constructor(
     private readonly settings: GameSettings,
@@ -103,7 +107,37 @@ export class Game {
     return this.stats.get(playerId)?.score ?? 0;
   }
 
+  /** Puts the game on hold (e.g. the TV dropped). Timers stop; answers are ignored until resume. */
+  pause(): void {
+    if (this.paused || this.disposed) return;
+    for (const timer of this.timers) clearTimeout(timer);
+    this.timers.clear();
+    this.paused = this.current && !this.current.revealed ? 'round' : 'between';
+  }
+
+  /** Carries on after pause. An interrupted round replays from the top: same song, fresh clock, no answers kept. */
+  resume(): void {
+    if (!this.paused || this.disposed) return;
+    const was = this.paused;
+    this.paused = null;
+    if (this.pendingStart) {
+      const prepared = this.pendingStart;
+      this.pendingStart = null;
+      this.startRound(prepared);
+    } else if (was === 'round' && this.current) {
+      const { roundId, question, track } = this.current;
+      this.startRound({ roundId, question, track }, { replay: true });
+    } else {
+      this.after(1000, () => void this.advance());
+    }
+  }
+
+  get isPaused(): boolean {
+    return this.paused !== null;
+  }
+
   guess(playerId: string, roundId: string, choice: Letter, claimedMs: number): void {
+    if (this.paused) return;
     const round = this.current;
     if (!round || round.revealed || round.guesses.has(playerId) || roundId !== round.roundId) return;
     if (!this.owner.activePlayerIds().includes(playerId)) return;
@@ -165,8 +199,12 @@ export class Game {
     return null;
   }
 
-  private startRound(prepared: PreparedRound): void {
-    this.index += 1;
+  private startRound(prepared: PreparedRound, { replay = false } = {}): void {
+    if (this.paused) {
+      this.pendingStart = prepared;
+      return;
+    }
+    if (!replay) this.index += 1;
     const { clipMs, rounds } = this.settings;
     const startAt = Date.now() + PRELOAD_MS;
     this.current = { ...prepared, startAt, guesses: new Map(), revealed: false };
@@ -187,7 +225,7 @@ export class Game {
     this.sendLockedIn();
 
     this.after(startAt + clipMs + LATE_GUESS_GRACE_MS - Date.now(), () => this.reveal(prepared.roundId));
-    if (this.index < rounds) this.next = this.prepare().catch(() => null);
+    if (!replay && this.index < rounds) this.next = this.prepare().catch(() => null);
   }
 
   private sendLockedIn(): void {
@@ -200,6 +238,7 @@ export class Game {
   }
 
   private revealIfEveryoneAnswered(): void {
+    if (this.paused) return;
     const round = this.current;
     if (!round || round.revealed) return;
     const active = this.owner.activePlayerIds();

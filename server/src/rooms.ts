@@ -4,6 +4,7 @@ import {
   MAX_PLAYERS,
   ROOM_CODE_ALPHABET,
   VOTE_MS,
+  isBlockedInitials,
   replayWins,
   type ClientMessage,
   type ErrorCode,
@@ -29,15 +30,25 @@ export interface Session {
 
 interface RoomPlayer {
   id: string;
+  /** Secret for getting this seat back after a dropped connection or reload. */
+  token: string;
   slot: number;
   session: Session | null;
   initials: string;
   ready: boolean;
+  /** Running while the player is away; removes them when it fires. */
+  goneTimer: NodeJS.Timeout | null;
 }
+
+/** How long a dropped player's (or TV's) seat is held (PLAN.md §5). Shorter in tests via env. */
+export const SEAT_HOLD_MS = Number(process.env.SEAT_HOLD_MS ?? 60_000);
+/** A host who drops keeps the role this long before it passes on. */
+export const HOST_GRACE_MS = Number(process.env.HOST_GRACE_MS ?? 10_000);
 
 const rooms = new Map<string, Room>();
 
 const newId = (): string => randomBytes(8).toString('base64url');
+const newToken = (): string => randomBytes(16).toString('base64url');
 
 function newRoomCode(): string {
   for (;;) {
@@ -51,12 +62,32 @@ function sendError(session: Session, code: ErrorCode, message: string): void {
   session.send({ t: 'error', code, message });
 }
 
+function detach(session: Session): void {
+  session.room = null;
+  session.role = null;
+  session.playerId = null;
+}
+
+/** DEV, then DE2…DE9 if taken or blocked (PLAN.md §5). */
+export function uniqueInitials(wanted: string, inUse: Set<string>): string {
+  const free = (s: string) => !inUse.has(s) && !isBlockedInitials(s);
+  if (free(wanted)) return wanted;
+  for (let n = 2; n <= 9; n++) {
+    const candidate = `${wanted.slice(0, 2)}${n}`;
+    if (free(candidate)) return candidate;
+  }
+  return isBlockedInitials(wanted) ? 'AAA' : wanted;
+}
+
 export class Room {
   readonly code = newRoomCode();
   private tv: Session | null = null;
+  private tvToken: string | null = null;
   private tvReady = false;
+  private tvGoneTimer: NodeJS.Timeout | null = null;
   private readonly players = new Map<string, RoomPlayer>();
   private hostId: string | null = null;
+  private hostTimer: NodeJS.Timeout | null = null;
   private phase: RoomPhase = 'lobby';
   private rules: RoomRules;
   private game: Game | null = null;
@@ -71,6 +102,7 @@ export class Room {
 
   attachTv(session: Session): void {
     this.tv = session;
+    this.tvToken = newToken();
     session.room = this;
     session.role = 'tv';
     session.playerId = null;
@@ -78,46 +110,136 @@ export class Room {
   }
 
   addPlayer(session: Session, initials: string): void {
-    if (this.phase === 'playing') return sendError(session, 'game_in_progress', 'That game already started. Join after it ends.');
     if (this.players.size >= MAX_PLAYERS) return sendError(session, 'room_full', `That room is full (${MAX_PLAYERS} players).`);
 
     const taken = new Set([...this.players.values()].map((p) => p.slot));
     let slot = 1;
     while (taken.has(slot)) slot++;
 
-    const player: RoomPlayer = { id: newId(), slot, session, initials: this.uniqueInitials(initials, null), ready: false };
+    const inUse = new Set([...this.players.values()].map((p) => p.initials));
+    const player: RoomPlayer = {
+      id: newId(),
+      token: newToken(),
+      slot,
+      session,
+      initials: uniqueInitials(initials, inUse),
+      ready: false,
+      goneTimer: null,
+    };
     this.players.set(player.id, player);
     session.room = this;
     session.role = 'player';
     session.playerId = player.id;
     if (!this.hostId) this.hostId = player.id;
     this.broadcastState();
+    // Late join (PLAN.md §5): drop into the round in progress, starting from 0 points.
+    const live = this.game?.roundInProgress();
+    if (live) session.send(live);
   }
 
-  /** Called when a session leaves on purpose or disconnects. */
+  /** Gets a seat back after a dropped connection or reload. */
+  resume(session: Session, token: string): boolean {
+    if (this.tvToken && token === this.tvToken) {
+      if (this.tv && this.tv !== session) detach(this.tv);
+      this.tv = session;
+      session.room = this;
+      session.role = 'tv';
+      session.playerId = null;
+      if (this.tvGoneTimer) clearTimeout(this.tvGoneTimer);
+      this.tvGoneTimer = null;
+      this.game?.resume();
+      this.broadcastState();
+      const live = this.game?.roundInProgress();
+      if (live) session.send(live);
+      return true;
+    }
+
+    const player = [...this.players.values()].find((p) => p.token === token);
+    if (!player) return false;
+    if (player.session && player.session !== session) detach(player.session);
+    player.session = session;
+    if (player.goneTimer) clearTimeout(player.goneTimer);
+    player.goneTimer = null;
+    session.room = this;
+    session.role = 'player';
+    session.playerId = player.id;
+    if (this.hostId === player.id && this.hostTimer) {
+      clearTimeout(this.hostTimer);
+      this.hostTimer = null;
+    }
+    if (!this.hostId) this.hostId = player.id;
+    this.broadcastState();
+    const live = this.game?.roundInProgress();
+    if (live) session.send(live);
+    return true;
+  }
+
+  /** Leaving on purpose (BACK TO HOME, removed by the host): the seat goes right away. */
   remove(session: Session): void {
     if (session.role === 'tv') {
       this.close('The TV left, so the room closed.', session);
       return;
     }
     const player = session.playerId ? this.players.get(session.playerId) : undefined;
-    session.room = null;
-    session.role = null;
-    session.playerId = null;
+    detach(session);
     if (!player) return;
+    player.session = null;
+    this.release(player);
+  }
 
-    if (this.phase === 'lobby') {
-      this.players.delete(player.id);
-    } else {
-      player.session = null; // Keep them on the scoreboard for this game.
-      this.game?.playerLeft();
+  /**
+   * The connection dropped or the page is reloading: hold the seat for SEAT_HOLD_MS.
+   * A TV going away in TV-sound mode pauses the game until it's back.
+   */
+  away(session: Session): void {
+    if (session.role === 'tv') {
+      detach(session);
+      if (this.tv !== session) return;
+      this.tv = null;
+      if (this.phase === 'playing' && this.rules.sound === 'tv') this.game?.pause();
+      this.tvGoneTimer = setTimeout(() => this.close('The TV has been gone for a minute, so the room closed.', null), SEAT_HOLD_MS);
+      this.broadcastState();
+      return;
     }
-    if (this.hostId === player.id) this.hostId = this.nextHost();
-    if (!this.tv && this.connectedPlayers().length === 0) return this.destroy();
+    const player = session.playerId ? this.players.get(session.playerId) : undefined;
+    detach(session);
+    if (!player || player.session !== session) return;
+    player.session = null;
+    player.goneTimer = setTimeout(() => this.release(player), SEAT_HOLD_MS);
+    this.game?.playerLeft();
     if (this.vote) {
       this.vote.yes.delete(player.id);
       if (this.everyoneVotedYes()) return this.resolveVote();
     }
+    if (this.hostId === player.id && !this.hostTimer) {
+      this.hostTimer = setTimeout(() => {
+        this.hostTimer = null;
+        if (this.hostId === player.id && !player.session) {
+          this.hostId = this.nextHost();
+          this.broadcastState();
+        }
+      }, HOST_GRACE_MS);
+    }
+    this.broadcastState();
+  }
+
+  /** The seat is gone for good: off the lobby, or kept on the scoreboard until this game ends. */
+  private release(player: RoomPlayer): void {
+    if (player.goneTimer) clearTimeout(player.goneTimer);
+    player.goneTimer = null;
+    if (this.phase === 'lobby') this.players.delete(player.id);
+    else this.game?.playerLeft();
+    if (this.hostId === player.id) {
+      if (this.hostTimer) clearTimeout(this.hostTimer);
+      this.hostTimer = null;
+      this.hostId = this.nextHost();
+    }
+    if (this.vote) {
+      this.vote.yes.delete(player.id);
+      if (this.everyoneVotedYes()) return this.resolveVote();
+    }
+    const anyoneHeld = [...this.players.values()].some((p) => p.session !== null || p.goneTimer !== null);
+    if (!this.tv && !this.tvGoneTimer && !anyoneHeld) return this.destroy();
     this.broadcastState();
   }
 
@@ -128,17 +250,6 @@ export class Room {
 
   private connectedPlayers(): RoomPlayer[] {
     return [...this.players.values()].filter((p) => p.session !== null);
-  }
-
-  /** DEV, then DE2…DE9 if taken (PLAN.md §5). */
-  private uniqueInitials(wanted: string, exceptId: string | null): string {
-    const inUse = new Set([...this.players.values()].filter((p) => p.id !== exceptId).map((p) => p.initials));
-    if (!inUse.has(wanted)) return wanted;
-    for (let n = 2; n <= 9; n++) {
-      const candidate = `${wanted.slice(0, 2)}${n}`;
-      if (!inUse.has(candidate)) return candidate;
-    }
-    return wanted;
   }
 
   // ----- Messages -----
@@ -153,10 +264,12 @@ export class Room {
         this.tvReady = true;
         return this.broadcastState();
 
-      case 'room:initials':
+      case 'room:initials': {
         if (!player || this.phase === 'playing') return;
-        player.initials = this.uniqueInitials(msg.initials, player.id);
+        const inUse = new Set([...this.players.values()].filter((p) => p.id !== player.id).map((p) => p.initials));
+        player.initials = uniqueInitials(msg.initials, inUse);
         return this.broadcastState();
+      }
 
       case 'room:ready':
         if (!player) return;
@@ -176,9 +289,12 @@ export class Room {
         if (!isHost) return sendError(session, 'not_host', 'Only the host can remove players.');
         const target = this.players.get(msg.playerId);
         if (!target || target.id === player.id) return;
-        target.session?.send({ t: 'room:closed', reason: 'The host removed you from the room.' });
-        if (target.session) this.remove(target.session);
-        else {
+        if (target.session) {
+          target.session.send({ t: 'room:closed', reason: 'The host removed you from the room.' });
+          this.remove(target.session);
+        } else {
+          if (target.goneTimer) clearTimeout(target.goneTimer);
+          target.goneTimer = null;
           this.players.delete(target.id);
           this.broadcastState();
         }
@@ -226,7 +342,7 @@ export class Room {
     this.cancelVote();
     this.game?.dispose();
     for (const p of [...this.players.values()]) {
-      if (!p.session) this.players.delete(p.id); // Drop players who left during the last game.
+      if (!p.session && !p.goneTimer) this.players.delete(p.id); // Drop players who left during the last game.
       else p.ready = false;
     }
     this.phase = 'playing';
@@ -261,7 +377,7 @@ export class Room {
     this.game?.dispose();
     this.game = null;
     this.phase = 'lobby';
-    for (const p of [...this.players.values()]) if (!p.session) this.players.delete(p.id);
+    for (const p of [...this.players.values()]) if (!p.session && !p.goneTimer) this.players.delete(p.id);
     this.broadcastState();
   }
 
@@ -314,6 +430,7 @@ export class Room {
       tvReady: this.tvReady,
       rules: this.rules,
       vote: this.vote ? { endsAt: this.vote.endsAt, yes: [...this.vote.yes], total: this.connectedPlayers().length } : null,
+      paused: this.game?.isPaused ?? false,
       players: [...this.players.values()]
         .sort((a, b) => a.slot - b.slot)
         .map((p) => ({
@@ -329,25 +446,22 @@ export class Room {
 
   private broadcastState(): void {
     const room = this.view();
-    if (this.tv) this.tv.send({ t: 'room:state', room, role: 'tv', you: null });
-    for (const p of this.players.values()) p.session?.send({ t: 'room:state', room, role: 'player', you: p.id });
+    if (this.tv && this.tvToken) this.tv.send({ t: 'room:state', room, role: 'tv', you: null, token: this.tvToken });
+    for (const p of this.players.values()) p.session?.send({ t: 'room:state', room, role: 'player', you: p.id, token: p.token });
   }
 
   private close(reason: string, except: Session | null): void {
     for (const p of this.players.values()) {
       if (p.session && p.session !== except) {
         p.session.send({ t: 'room:closed', reason });
-        p.session.room = null;
-        p.session.role = null;
-        p.session.playerId = null;
+        detach(p.session);
       }
     }
-    if (this.tv && this.tv !== except) this.tv.send({ t: 'room:closed', reason });
-    if (except) {
-      except.room = null;
-      except.role = null;
-      except.playerId = null;
+    if (this.tv && this.tv !== except) {
+      this.tv.send({ t: 'room:closed', reason });
+      detach(this.tv);
     }
+    if (except) detach(except);
     this.destroy();
   }
 
@@ -355,6 +469,9 @@ export class Room {
     this.cancelVote();
     this.game?.dispose();
     this.game = null;
+    if (this.tvGoneTimer) clearTimeout(this.tvGoneTimer);
+    if (this.hostTimer) clearTimeout(this.hostTimer);
+    for (const p of this.players.values()) if (p.goneTimer) clearTimeout(p.goneTimer);
     rooms.delete(this.code);
   }
 }
@@ -379,8 +496,19 @@ export function handleRoomMessage(session: Session, msg: ClientMessage): boolean
       room.addPlayer(session, msg.initials);
       return true;
     }
+    case 'room:resume': {
+      const room = rooms.get(msg.code);
+      if (session.room && session.room !== room) session.room.remove(session);
+      if (!room || !room.resume(session, msg.token)) {
+        sendError(session, 'resume_failed', 'That seat is gone. Join the room again.');
+      }
+      return true;
+    }
     case 'room:leave':
       session.room?.remove(session);
+      return true;
+    case 'room:away':
+      session.room?.away(session);
       return true;
     case 'room:initials':
     case 'room:ready':

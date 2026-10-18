@@ -10,7 +10,10 @@ function client() {
   const ws = new WebSocket(url, origin ? { origin } : undefined);
   const inbox: ServerMessage[] = [];
   ws.on('message', (d) => inbox.push(JSON.parse(d.toString()) as ServerMessage));
-  const send = (m: ClientMessage) => ws.send(JSON.stringify(m));
+  const send = (m: ClientMessage) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(m));
+  // Like the real app: ping every 3 s, or the server's heartbeat drops the connection.
+  const ping = setInterval(() => send({ t: 'ping', at: Date.now() }), 3000);
+  ws.on('close', () => clearInterval(ping));
   const until = async <T extends ServerMessage['t']>(t: T, where: (m: Extract<ServerMessage, { t: T }>) => boolean, ms = 60_000, from = 0) => {
     const end = Date.now() + ms;
     while (Date.now() < end) {

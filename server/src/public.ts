@@ -15,12 +15,14 @@ import {
   type ServerMessage,
 } from '@replay/shared';
 import { Game } from './game';
-import type { Session } from './rooms';
+import { SEAT_HOLD_MS, uniqueInitials, type Session } from './rooms';
 
 interface PublicPlayer {
   id: string;
-  session: Session;
+  token: string;
+  session: Session | null;
   initials: string;
+  goneTimer: NodeJS.Timeout | null;
 }
 
 const BEST_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -54,11 +56,36 @@ class PublicRoom {
       session.send({ t: 'error', code: 'room_full', message: 'The public room is full right now. Try again in a minute.' });
       return;
     }
-    const player: PublicPlayer = { id: randomBytes(8).toString('base64url'), session, initials: this.uniqueInitials(initials) };
+    const inUse = new Set([...this.players.values()].map((p) => p.initials));
+    const player: PublicPlayer = {
+      id: randomBytes(8).toString('base64url'),
+      token: randomBytes(16).toString('base64url'),
+      session,
+      initials: uniqueInitials(initials, inUse),
+      goneTimer: null,
+    };
     this.players.set(player.id, player);
+    this.attach(session, player);
+  }
+
+  /** Gets a public seat (and this set's score) back after a dropped connection or reload. */
+  resume(session: Session, token: string): boolean {
+    const player = [...this.players.values()].find((p) => p.token === token);
+    if (!player) return false;
+    if (player.session && player.session !== session) {
+      player.session.inPublic = false;
+      player.session.playerId = null;
+    }
+    if (player.goneTimer) clearTimeout(player.goneTimer);
+    player.goneTimer = null;
+    this.attach(session, player);
+    return true;
+  }
+
+  private attach(session: Session, player: PublicPlayer): void {
+    player.session = session;
     session.inPublic = true;
     session.playerId = player.id;
-
     if (this.phase === 'waiting' && !this.timer) this.schedule(PUBLIC_FIRST_SET_DELAY_MS);
     this.broadcastState();
     // Drop straight into the round in progress, if there is one.
@@ -66,14 +93,41 @@ class PublicRoom {
     if (live) session.send(live);
   }
 
+  /** Leaving on purpose: the seat goes right away. */
   leave(session: Session): void {
-    if (!session.inPublic || !session.playerId) return;
-    this.players.delete(session.playerId);
+    const player = this.detach(session);
+    if (player) this.release(player);
+  }
+
+  /** Dropped connection or reload: hold the seat for SEAT_HOLD_MS. */
+  away(session: Session): void {
+    const player = this.detach(session);
+    if (!player) return;
+    player.goneTimer = setTimeout(() => this.release(player), SEAT_HOLD_MS);
+    this.game?.playerLeft();
+    this.broadcastState();
+  }
+
+  private detach(session: Session): PublicPlayer | null {
+    if (!session.inPublic || !session.playerId) return null;
+    const player = this.players.get(session.playerId);
     session.inPublic = false;
     session.playerId = null;
+    if (!player || player.session !== session) return null;
+    player.session = null;
+    return player;
+  }
+
+  private release(player: PublicPlayer): void {
+    if (player.goneTimer) clearTimeout(player.goneTimer);
+    this.players.delete(player.id);
     this.game?.playerLeft();
     if (this.players.size === 0) return this.sleep();
     this.broadcastState();
+  }
+
+  private connected(): PublicPlayer[] {
+    return [...this.players.values()].filter((p) => p.session !== null);
   }
 
   guess(session: Session, roundId: string, choice: Letter, elapsedMs: number): void {
@@ -83,18 +137,7 @@ class PublicRoom {
   stats(): { online: number; best: BestScore[] } {
     const cutoff = Date.now() - BEST_WINDOW_MS;
     this.best = this.best.filter((b) => b.at >= cutoff);
-    return { online: this.players.size, best: this.best.slice(0, BEST_SHOWN).map(({ initials, score }) => ({ initials, score })) };
-  }
-
-  /** DEV, then DE2…DE9 if taken, same as rooms (PLAN.md §5). A crowd beyond that shares initials. */
-  private uniqueInitials(wanted: string): string {
-    const inUse = new Set([...this.players.values()].map((p) => p.initials));
-    if (!inUse.has(wanted)) return wanted;
-    for (let n = 2; n <= 9; n++) {
-      const candidate = `${wanted.slice(0, 2)}${n}`;
-      if (!inUse.has(candidate)) return candidate;
-    }
-    return wanted;
+    return { online: this.connected().length, best: this.best.slice(0, BEST_SHOWN).map(({ initials, score }) => ({ initials, score })) };
   }
 
   // ----- Sets -----
@@ -109,7 +152,7 @@ class PublicRoom {
   }
 
   private startSet(): void {
-    if (this.players.size === 0) return this.sleep();
+    if (this.connected().length === 0) return this.sleep();
     this.game?.dispose();
     this.setNumber += 1;
     const mix = PUBLIC_MIX_ORDER[this.mixIndex % PUBLIC_MIX_ORDER.length]!;
@@ -120,7 +163,7 @@ class PublicRoom {
       { mix, rounds: ROUNDS_PER_GAME, clipMs: CLIP_MS },
       {
         playerIds: () => [...this.players.keys()],
-        activePlayerIds: () => [...this.players.keys()],
+        activePlayerIds: () => this.connected().map((p) => p.id),
         initialsOf: (id) => this.players.get(id)?.initials ?? '???',
         send: (build) => this.sendEach(build),
         onFinished: () => {
@@ -158,6 +201,8 @@ class PublicRoom {
 
   /** Nobody left: stop the music until someone comes back. */
   private sleep(): void {
+    for (const p of this.players.values()) if (p.goneTimer) clearTimeout(p.goneTimer);
+    this.players.clear();
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     this.game?.dispose();
@@ -170,7 +215,7 @@ class PublicRoom {
 
   private view(): PublicView {
     return {
-      online: this.players.size,
+      online: this.connected().length,
       phase: this.phase,
       nextAt: this.nextAt,
       set: this.setNumber,
@@ -180,6 +225,7 @@ class PublicRoom {
 
   private sendEach(build: (playerId: string | null) => ServerMessage | null): void {
     for (const p of this.players.values()) {
+      if (!p.session) continue;
       const msg = build(p.id);
       if (!msg) continue;
       if (msg.t === 'reveal' || msg.t === 'gameOver') p.session.send({ ...msg, board: boardFor(msg.board, p.id) });
@@ -189,7 +235,7 @@ class PublicRoom {
 
   private broadcastState(): void {
     const view = this.view();
-    for (const p of this.players.values()) p.session.send({ t: 'public:state', view, you: p.id });
+    for (const p of this.players.values()) p.session?.send({ t: 'public:state', view, you: p.id, token: p.token });
   }
 }
 

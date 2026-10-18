@@ -37,11 +37,16 @@ export type ClientMessage =
   | { t: 'room:kick'; playerId: string }
   | { t: 'room:end' }
   | { t: 'room:leave' }
+  /** The page is closing or reloading: keep the seat (PLAN.md §5), unlike room:leave. */
+  | { t: 'room:away' }
+  | { t: 'room:resume'; code: string; token: string }
   | { t: 'tv:soundOn' }
   | { t: 'vote'; replay: boolean }
   // Public room
   | { t: 'public:join'; initials: string }
   | { t: 'public:leave' }
+  | { t: 'public:away' }
+  | { t: 'public:resume'; token: string }
   | { t: 'public:stats' };
 
 export interface RevealedTrack {
@@ -85,7 +90,14 @@ export type ServerMessage =
   | { t: 'echo'; text: string }
   | { t: 'error'; code: ErrorCode; message: string }
   | { t: 'solo:preparing'; mix: MixId }
-  | { t: 'room:state'; room: RoomView; role: RoomRole; you: string | null }
+  | {
+      t: 'room:state';
+      room: RoomView;
+      role: RoomRole;
+      you: string | null;
+      /** Secret for getting this seat back after a dropped connection or reload. */
+      token: string;
+    }
   | { t: 'room:closed'; reason: string }
   | {
       t: 'roundStart';
@@ -115,7 +127,7 @@ export type ServerMessage =
       nextAt: number | null;
     }
   | { t: 'gameOver'; board: BoardEntry[]; awards: Awards; you: FinalStats | null }
-  | { t: 'public:state'; view: PublicView; you: string }
+  | { t: 'public:state'; view: PublicView; you: string; token: string }
   | { t: 'public:stats'; online: number; best: BestScore[] };
 
 export type ErrorCode =
@@ -126,7 +138,8 @@ export type ErrorCode =
   | 'room_full'
   | 'game_in_progress'
   | 'not_host'
-  | 'cannot_start';
+  | 'cannot_start'
+  | 'resume_failed';
 
 const MAX_MESSAGE_BYTES = 4096;
 const MAX_ECHO_LENGTH = 200;
@@ -200,6 +213,16 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       return { t: 'room:start' };
     case 'room:end':
       return { t: 'room:end' };
+    case 'room:away':
+      return { t: 'room:away' };
+    case 'room:resume': {
+      const code = upper(msg.code);
+      return isRoomCode(code) && isId(msg.token) ? { t: 'room:resume', code, token: msg.token } : null;
+    }
+    case 'public:away':
+      return { t: 'public:away' };
+    case 'public:resume':
+      return isId(msg.token) ? { t: 'public:resume', token: msg.token } : null;
     case 'room:leave':
       return { t: 'room:leave' };
     case 'public:join': {

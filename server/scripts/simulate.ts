@@ -15,6 +15,9 @@ class Client {
 
   constructor(readonly name: string) {
     this.ws = new WebSocket(url, origin ? { origin } : undefined);
+    // Like the real app: ping every 3 s, or the server's heartbeat drops the connection.
+    const ping = setInterval(() => this.ws.readyState === WebSocket.OPEN && this.send({ t: 'ping', at: Date.now() }), 3000);
+    this.ws.on('close', () => clearInterval(ping));
     this.ws.on('message', (data) => {
       const msg = JSON.parse(data.toString()) as ServerMessage;
       this.inbox.push(msg);
@@ -156,7 +159,9 @@ async function main(): Promise<void> {
   check(replay.index === 1, 'everyone voted yes: a new game starts right away in the same room');
   host.send({ t: 'room:end' });
   const lobbyAgain = await tv.next('room:state', (m) => m.room.phase === 'lobby', 5000);
-  check(lobbyAgain.room.vote === null && lobbyAgain.room.players.length === 5, 'host can send everyone back to the lobby');
+  check(lobbyAgain.room.vote === null && lobbyAgain.room.phase === 'lobby', 'host can send everyone back to the lobby');
+  const p6 = lobbyAgain.room.players.find((p) => p.initials === 'DE2');
+  check(lobbyAgain.room.players.length === 6 && p6?.connected === false, 'the player who dropped keeps their seat for a minute (shown as away)');
 
   host.send({ t: 'room:kick', playerId: tv.last('room:state')!.room.players[1]!.id });
   const kicked = await phones[1]!.got('room:closed', () => true);

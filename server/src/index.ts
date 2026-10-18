@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, type WebSocket } from 'ws';
 import { AUDIO_PATH, WS_PATH, parseClientMessage, type ServerMessage } from '@replay/shared';
 import { config, isOriginAllowed } from './config';
 import { serveClip } from './audio';
@@ -32,6 +32,17 @@ const httpServer = createServer((req, res) => {
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: 4096 });
 
+// Heartbeat: clients ping every few seconds. Through the hosting proxy a vanished phone isn't
+// noticed for 10-20 s, so the server drops any connection that has gone quiet itself.
+const SILENCE_LIMIT_MS = 12_000;
+const lastHeard = new WeakMap<WebSocket, number>();
+setInterval(() => {
+  const now = Date.now();
+  for (const ws of wss.clients) {
+    if (now - (lastHeard.get(ws) ?? now) > SILENCE_LIMIT_MS) ws.terminate();
+  }
+}, 4000).unref();
+
 httpServer.on('upgrade', (req, socket, head) => {
   const path = new URL(req.url ?? '/', 'http://localhost').pathname;
   if (path !== WS_PATH || !isOriginAllowed(req.headers.origin)) {
@@ -62,7 +73,9 @@ wss.on('connection', (ws) => {
 
   session.send({ t: 'welcome', serverTime: Date.now() });
 
+  lastHeard.set(ws, Date.now());
   ws.on('message', (data) => {
+    lastHeard.set(ws, Date.now());
     const msg = parseClientMessage(data.toString());
     if (!msg) {
       session.send({ t: 'error', code: 'bad_message', message: 'Message was not understood.' });
@@ -78,6 +91,16 @@ wss.on('connection', (ws) => {
       case 'public:leave':
         publicRoom.leave(session);
         return;
+      case 'public:away':
+        publicRoom.away(session);
+        return;
+      case 'public:resume':
+        endSolo();
+        session.room?.remove(session);
+        if (!publicRoom.resume(session, msg.token)) {
+          session.send({ t: 'error', code: 'resume_failed', message: 'That seat is gone. Press start to join again.' });
+        }
+        return;
       case 'public:stats':
         session.send({ t: 'public:stats', ...publicRoom.stats() });
         return;
@@ -86,6 +109,7 @@ wss.on('connection', (ws) => {
         break;
       case 'room:create':
       case 'room:join':
+      case 'room:resume':
         endSolo();
         publicRoom.leave(session);
         break;
@@ -117,9 +141,10 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
+    // A dropped connection keeps the seat for a minute (PLAN.md §5); leaving on purpose is room:leave.
     endSolo();
-    session.room?.remove(session);
-    publicRoom.leave(session);
+    session.room?.away(session);
+    publicRoom.away(session);
   });
 });
 
