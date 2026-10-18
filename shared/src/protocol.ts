@@ -147,7 +147,8 @@ export type ErrorCode =
   | 'game_in_progress'
   | 'not_host'
   | 'cannot_start'
-  | 'resume_failed';
+  | 'resume_failed'
+  | 'rate_limited';
 
 const MAX_MESSAGE_BYTES = 4096;
 const MAX_ECHO_LENGTH = 200;

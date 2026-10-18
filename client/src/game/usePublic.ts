@@ -61,7 +61,7 @@ function reducer(state: PublicState, action: Action): PublicState {
           return { ...state, over: msg, round: null };
         case 'error':
           if (msg.code === 'resume_failed') return { ...INITIAL };
-          return { ...state, status: state.status === 'pending' ? 'idle' : state.status, error: msg.message };
+          return { ...state, status: state.status === 'pending' ? 'idle' : state.status, error: msg.message, resuming: false };
         default:
           return state;
       }
@@ -113,6 +113,7 @@ export function usePublic() {
       offSeat();
       offStatus();
       window.removeEventListener('pagehide', away);
+      connection.clearQueued();
       playerRef.current?.dispose();
       playerRef.current = null;
       if (latest.current.status === 'in') {
@@ -128,10 +129,9 @@ export function usePublic() {
       unlockAudio: () => player().unlock(),
       join: (initials: string) => {
         player().unlock();
-        if (connection.send({ t: 'public:join', initials })) {
-          playSfx('coin');
-          dispatch({ type: 'pending' });
-        }
+        connection.sendWhenOnline({ t: 'public:join', initials });
+        playSfx('coin');
+        dispatch({ type: 'pending' });
       },
       setInitials: (initials: string) => connection.send({ t: 'public:initials', initials }),
       pick: (letter: Letter) => {

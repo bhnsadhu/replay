@@ -26,6 +26,7 @@ class Connection {
   status: ConnectionStatus = 'connecting';
   /** Date.now() when the status last changed. */
   statusSince = Date.now();
+  private queued: ClientMessage | null = null;
   rttMs: number | null = null;
 
   start(): void {
@@ -38,6 +39,19 @@ class Connection {
     if (this.ws?.readyState !== WebSocket.OPEN) return false;
     this.ws.send(JSON.stringify(msg));
     return true;
+  }
+
+  /**
+   * Sends now, or as soon as the connection is up (the free server can take up to a minute to
+   * wake). Only the latest queued message is kept: it's for one-off taps like JOIN.
+   */
+  sendWhenOnline(msg: ClientMessage): void {
+    if (!this.send(msg)) this.queued = msg;
+  }
+
+  /** Drops a queued message, e.g. the screen that queued it closed before the server woke. */
+  clearQueued(): void {
+    this.queued = null;
   }
 
   onMessage(fn: MessageListener): () => void {
@@ -66,6 +80,11 @@ class Connection {
     if (status === this.status) return;
     this.status = status;
     this.statusSince = Date.now();
+    if (status === 'online' && this.queued) {
+      const msg = this.queued;
+      this.queued = null;
+      this.send(msg);
+    }
     for (const fn of this.statusListeners) fn(status);
   }
 

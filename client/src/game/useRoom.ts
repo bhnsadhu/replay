@@ -97,7 +97,7 @@ function reducer(state: RoomState, action: Action): RoomState {
         case 'error':
           // The seat couldn't be resumed: back to joining, with a note on why.
           if (msg.code === 'resume_failed') return { ...INITIAL, error: msg.message };
-          return { ...state, status: state.status === 'pending' ? 'idle' : state.status, error: msg.message };
+          return { ...state, status: state.status === 'pending' ? 'idle' : state.status, error: msg.message, resuming: false };
         default:
           return state;
       }
@@ -166,6 +166,7 @@ export function useRoom() {
       offSeat();
       offStatus();
       window.removeEventListener('pagehide', onPageHide);
+      connection.clearQueued();
       playerRef.current?.dispose();
       playerRef.current = null;
       // Navigating away inside the app (BACK TO HOME) is leaving on purpose. (Only when actually in a
@@ -197,11 +198,13 @@ export function useRoom() {
       },
       createAsPlayer: (initials: string) => {
         unlockAudio();
-        if (send({ t: 'room:create', role: 'player', initials })) dispatch({ type: 'pending' });
+        connection.sendWhenOnline({ t: 'room:create', role: 'player', initials });
+        dispatch({ type: 'pending' });
       },
       join: (code: string, initials: string) => {
         unlockAudio();
-        if (send({ t: 'room:join', code, initials })) dispatch({ type: 'pending' });
+        connection.sendWhenOnline({ t: 'room:join', code, initials });
+        dispatch({ type: 'pending' });
       },
       soundOn: () => {
         unlockAudio();

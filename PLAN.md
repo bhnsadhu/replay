@@ -247,6 +247,8 @@ Each milestone ends with something you can try. Don't start the next one until t
 | M7 | Polish | Glitch reveal, rewind transition, reduce effects, options screen, share score card, sound effects, a11y pass |
 | M8 | Ship | Website live on Vercel, server live on Render, both domains connected, warm-up screen works, basic rate limits on joins/guesses |
 
+M8 limits (`server/src/limits.ts`, per IP via Cloudflare's `cf-connecting-ip`): 40 open sockets, 60 new sockets then 1/s, 30 join/resume/create/solo tries then 1 per 3 s, 150 audio requests then 4/s; per connection 40 messages then 10/s, closed after 200 dropped. One Wi-Fi party (TV + 8 phones) stays far below all of them.
+
 ---
 
 ## 9. Testing

@@ -1,4 +1,4 @@
-import { createServer } from 'node:http';
+import { createServer, type IncomingMessage } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { AUDIO_PATH, WS_PATH, parseClientMessage, type ServerMessage } from '@replay/shared';
@@ -7,6 +7,7 @@ import { serveClip } from './audio';
 import { SoloGame } from './solo';
 import { handleRoomMessage, type Session } from './rooms';
 import { publicRoom } from './public';
+import { LIMITS, TokenBucket, audioLimiter, clientIp, closeConnection, connectLimiter, openConnection, tryLimiter } from './limits';
 
 const httpServer = createServer((req, res) => {
   const path = new URL(req.url ?? '/', 'http://localhost').pathname;
@@ -17,11 +18,17 @@ const httpServer = createServer((req, res) => {
       'access-control-allow-origin': '*',
       'cache-control': 'no-store',
     });
-    res.end(JSON.stringify({ ok: true, serverTime: Date.now() }));
+    // ipSource says which header the rate limits key on (never the IP itself).
+    res.end(JSON.stringify({ ok: true, serverTime: Date.now(), ipSource: clientIp(req).source }));
     return;
   }
 
   if (path.startsWith(`${AUDIO_PATH}/`) && (req.method === 'GET' || req.method === 'HEAD')) {
+    if (!audioLimiter.take(clientIp(req).ip)) {
+      res.writeHead(429, { 'content-type': 'text/plain', 'retry-after': '5' });
+      res.end('Too many requests');
+      return;
+    }
     serveClip(path.slice(AUDIO_PATH.length + 1), req, res);
     return;
   }
@@ -50,10 +57,32 @@ httpServer.on('upgrade', (req, socket, head) => {
     socket.destroy();
     return;
   }
+  if (!connectLimiter.take(clientIp(req).ip)) {
+    socket.write('HTTP/1.1 429 Too Many Requests\r\nRetry-After: 10\r\n\r\n');
+    socket.destroy();
+    return;
+  }
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
 });
 
-wss.on('connection', (ws) => {
+/** Messages that cost a lookup or a Deezer fetch, or guess at room codes: limited per IP. */
+const TRIES = new Set(['room:create', 'room:join', 'room:resume', 'public:join', 'public:resume', 'solo:start']);
+
+wss.on('connection', (ws, req: IncomingMessage) => {
+  const { ip } = clientIp(req);
+  if (!openConnection(ip)) {
+    ws.close(1013, 'Too many connections');
+    return;
+  }
+  const messages = new TokenBucket(LIMITS.messageBurst, LIMITS.messageEveryMs);
+  let drops = 0;
+  let warnedAt = 0;
+  const limited = (message: string) => {
+    if (Date.now() - warnedAt < 2000) return;
+    warnedAt = Date.now();
+    session.send({ t: 'error', code: 'rate_limited', message });
+  };
+
   const session: Session = {
     id: randomBytes(6).toString('base64url'),
     send: (msg: ServerMessage) => {
@@ -76,9 +105,18 @@ wss.on('connection', (ws) => {
   lastHeard.set(ws, Date.now());
   ws.on('message', (data) => {
     lastHeard.set(ws, Date.now());
+    if (!messages.take()) {
+      if (++drops > LIMITS.dropsBeforeClose) ws.close(1008, 'Too many messages');
+      else limited('Slow down a little.');
+      return;
+    }
     const msg = parseClientMessage(data.toString());
     if (!msg) {
       session.send({ t: 'error', code: 'bad_message', message: 'Message was not understood.' });
+      return;
+    }
+    if (TRIES.has(msg.t) && !tryLimiter.take(ip)) {
+      limited('Too many tries from this network. Wait a minute, then try again.');
       return;
     }
     // One place at a time: joining a room, the public room or solo leaves the others.
@@ -144,6 +182,7 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
+    closeConnection(ip);
     // A dropped connection keeps the seat for a minute (PLAN.md §5); leaving on purpose is room:leave.
     endSolo();
     session.room?.away(session);

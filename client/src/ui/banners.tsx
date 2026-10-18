@@ -10,13 +10,16 @@ interface Props {
 
 /** Fixed banners over any game screen: RECONNECTING… and TAP FOR SOUND (PLAN.md §5). */
 export function ConnectionBanners({ inGame, needsSoundTap, onTapSound }: Props) {
-  const { status } = useConnection();
+  const { status, warmingUp } = useConnection();
   const reconnecting = inGame && status !== 'online';
-  if (!reconnecting && !needsSoundTap) return null;
+  // Before joining: the free server naps when nobody's around and takes up to a minute to wake.
+  const waking = !inGame && warmingUp;
+  if (!reconnecting && !waking && !needsSoundTap) return null;
   return (
     <div className="banners" role="status">
       {reconnecting && <p className="banner banner--warn display">RECONNECTING…</p>}
-      {needsSoundTap && !reconnecting && (
+      {waking && <p className="banner banner--warn display">WAKING THE SERVER · UP TO A MINUTE</p>}
+      {needsSoundTap && !reconnecting && !waking && (
         <button type="button" className="banner banner--action display" onClick={onTapSound}>
           ♪ TAP FOR SOUND
         </button>
