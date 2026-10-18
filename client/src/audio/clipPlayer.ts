@@ -61,21 +61,35 @@ export class ClipPlayer {
     this.el.src = url;
     this.el.load();
 
+    // If the round already started (someone joining mid-round), skip ahead so the music
+    // lines up with the countdown and ends with the round.
+    let offsetMs = 0;
+
     this.el.onplaying = () => {
       if (this.playingAt !== null) return;
-      this.playingAt = performance.now();
-      this.stopTimer = window.setTimeout(() => this.el.pause(), durationMs);
+      // Timed from the round's start, not from when this device began playing.
+      this.playingAt = performance.now() - offsetMs;
+      this.stopTimer = window.setTimeout(() => this.el.pause(), durationMs - offsetMs);
     };
 
-    this.startTimer = window.setTimeout(
-      () => {
-        this.el.currentTime = 0;
+    const begin = () => {
+      offsetMs = Math.max(0, Date.now() - localStartAt);
+      if (offsetMs >= durationMs) return;
+      const seekAndPlay = () => {
+        this.el.currentTime = offsetMs / 1000;
         this.el.play().catch(() => {
           this.blocked = true;
         });
-      },
-      Math.max(0, localStartAt - Date.now()),
-    );
+      };
+      // iPhone Safari ignores seeking before the clip's metadata has loaded.
+      if (offsetMs > 250 && this.el.readyState < HTMLMediaElement.HAVE_METADATA) {
+        this.el.addEventListener('loadedmetadata', seekAndPlay, { once: true });
+      } else {
+        seekAndPlay();
+      }
+    };
+
+    this.startTimer = window.setTimeout(begin, Math.max(0, localStartAt - Date.now()));
   }
 
   /** For devices that don't play the clip (phones in TV mode): just track when it starts. */

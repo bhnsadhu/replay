@@ -846,3 +846,6 @@ button.answer-tile { width: 100%; }
 .top-three__item:nth-child(2) { text-align: center; }
 .top-three__item:nth-child(3) { text-align: right; }
 .top-three__item--leader { color: var(--yellow); }
+
+/* ---------- Public (M5) ---------- */
+.sound-note { margin: 0; text-align: center; font-size: 22px; color: var(--cyan); }

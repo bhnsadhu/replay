@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from 'react';
 import { ROOM_CODE_ALPHABET } from '@replay/shared';
 import { Logo, Phone, PhoneTopRow, StatusLine, TvHeader, TvStage } from '../ui/frames';
+import { HiScoreBox } from '../ui/game';
 import { useIsPhone } from '../game/clock';
 import { useConnection } from '../net/useConnection';
 import { navigate } from '../router';
+import { usePublicStats } from '../game/usePublic';
 
 const cleanCode = (raw: string): string =>
   raw
@@ -48,8 +50,14 @@ function useStatusText() {
   return warmingUp ? { text: 'WARMING UP THE CABINET…', tone: 'time' as const } : { text: 'CONNECTING…', tone: 'dim' as const };
 }
 
+function publicSub(online: number | null): string {
+  if (online === null || online === 0) return 'Nobody on yet · start a set, others drop in';
+  return `${online} playing now · nonstop sets of 10`;
+}
+
 function HomeTv() {
   const status = useStatusText();
+  const { online, best } = usePublicStats();
   const steps = ['Host on a TV or laptop', 'Friends join on their phones', 'Guess the song before they do'];
   return (
     <TvStage>
@@ -61,7 +69,14 @@ function HomeTv() {
             <span className="home-intro__sub">Guess the song before your friends do.</span>
           </div>
           <div className="tv-menu">
-            <button type="button" className="tv-menu__item tv-menu__item--primary" onClick={() => navigate('/host')}>
+            <button type="button" className="tv-menu__item tv-menu__item--primary" onClick={() => navigate('/play')}>
+              <span className="tv-menu__cursor display">▶</span>
+              <span className="tv-menu__text">
+                <span className="display">PLAY PUBLIC</span>
+                <span className="tv-menu__sub">{publicSub(online)}</span>
+              </span>
+            </button>
+            <button type="button" className="tv-menu__item" onClick={() => navigate('/host')}>
               <span className="tv-menu__cursor display">▶</span>
               <span className="tv-menu__text">
                 <span className="display">HOST A ROOM HERE</span>
@@ -85,17 +100,24 @@ function HomeTv() {
             </div>
           </div>
         </div>
-        <aside className="hiscore" aria-label="How it works">
-          <h2 className="hiscore__title display">HOW TO PLAY</h2>
-          <ol className="how-steps">
-            {steps.map((s, i) => (
-              <li key={s}>
-                <span className="display how-steps__n">{i + 1}</span>
-                {s}
-              </li>
-            ))}
-          </ol>
-        </aside>
+        {best.length > 0 ? (
+          <HiScoreBox
+            title="TODAY'S BEST"
+            rows={best.map((b, i) => ({ rank: i + 1, initials: b.initials, score: b.score, tone: i === 0 ? 'leader' : i < 4 ? 'normal' : 'dim' }))}
+          />
+        ) : (
+          <aside className="hiscore" aria-label="How it works">
+            <h2 className="hiscore__title display">HOW TO PLAY</h2>
+            <ol className="how-steps">
+              {steps.map((s, i) => (
+                <li key={s}>
+                  <span className="display how-steps__n">{i + 1}</span>
+                  {s}
+                </li>
+              ))}
+            </ol>
+          </aside>
+        )}
       </div>
       <div className="tv-footer">
         <span>CLICK TO SELECT</span>
@@ -107,6 +129,7 @@ function HomeTv() {
 
 function HomePhone() {
   const status = useStatusText();
+  const { online } = usePublicStats();
   const [joining, setJoining] = useState(false);
   return (
     <Phone>
@@ -116,6 +139,13 @@ function HomePhone() {
         <span className="menu-hero__coin display">INSERT COIN</span>
       </div>
       <div className="menu-list">
+        <button type="button" className="menu-item menu-item--two menu-item--on" onClick={() => navigate('/play')}>
+          <span className="menu-item__cursor display">▶</span>
+          <span className="menu-item__text">
+            <span className="display">PLAY PUBLIC</span>
+            <span className="menu-item__sub">{publicSub(online)}</span>
+          </span>
+        </button>
         <button type="button" className="menu-item menu-item--two" onClick={() => navigate('/solo')}>
           <span className="menu-item__cursor display">▶</span>
           <span className="menu-item__text">

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { LETTERS, type Letter } from '@replay/shared';
 import { TvHeader, TvStage } from '../../ui/frames';
 import { AnswerTile, SegmentTimer, Waveform, waveformBars, type AnswerState } from '../../ui/game';
@@ -17,9 +17,13 @@ interface Props {
   score: number;
   streak: number;
   onPick: (letter: Letter) => void;
+  /** Header right side. Defaults to the score. */
+  right?: { label: string; value: string };
+  /** Side panel. Defaults to the solo stats box. */
+  aside?: ReactNode;
 }
 
-export function SoloRoundDesktop({ round, picked, secondsLeft, progress, score, streak, onPick }: Props) {
+export function SoloRoundDesktop({ round, picked, secondsLeft, progress, score, streak, onPick, right, aside }: Props) {
   const clipSeconds = round.durationMs / 1000;
 
   useEffect(() => {
@@ -37,7 +41,7 @@ export function SoloRoundDesktop({ round, picked, secondsLeft, progress, score, 
 
   return (
     <TvStage>
-      <TvHeader status="play" context={`ROUND ${pad2(round.index)} / ${round.total}`} rightLabel="SCORE" rightValue={String(score)} />
+      <TvHeader status="play" context={`ROUND ${pad2(round.index)} / ${round.total}`} rightLabel={right?.label ?? 'SCORE'} rightValue={right?.value ?? String(score)} />
       <div className="tv-body">
         <div className="tv-main">
           <Waveform bars={BARS} progress={progress} />
@@ -57,6 +61,7 @@ export function SoloRoundDesktop({ round, picked, secondsLeft, progress, score, 
             ))}
           </div>
         </div>
+        {aside ?? (
         <StatBox
           title="SOLO"
           rows={[
@@ -66,6 +71,7 @@ export function SoloRoundDesktop({ round, picked, secondsLeft, progress, score, 
             { label: 'KEYS', value: LETTERS.map((l, i) => `${i + 1}=${l}`).join(' ') },
           ]}
         />
+        )}
       </div>
       <SegmentTimer size="tv" label="TIME" lit={timerSegments(secondsLeft, clipSeconds)} value={pad2(secondsLeft)} />
     </TvStage>

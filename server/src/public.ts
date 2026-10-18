@@ -54,7 +54,7 @@ class PublicRoom {
       session.send({ t: 'error', code: 'room_full', message: 'The public room is full right now. Try again in a minute.' });
       return;
     }
-    const player: PublicPlayer = { id: randomBytes(8).toString('base64url'), session, initials };
+    const player: PublicPlayer = { id: randomBytes(8).toString('base64url'), session, initials: this.uniqueInitials(initials) };
     this.players.set(player.id, player);
     session.inPublic = true;
     session.playerId = player.id;
@@ -84,6 +84,17 @@ class PublicRoom {
     const cutoff = Date.now() - BEST_WINDOW_MS;
     this.best = this.best.filter((b) => b.at >= cutoff);
     return { online: this.players.size, best: this.best.slice(0, BEST_SHOWN).map(({ initials, score }) => ({ initials, score })) };
+  }
+
+  /** DEV, then DE2…DE9 if taken, same as rooms (PLAN.md §5). A crowd beyond that shares initials. */
+  private uniqueInitials(wanted: string): string {
+    const inUse = new Set([...this.players.values()].map((p) => p.initials));
+    if (!inUse.has(wanted)) return wanted;
+    for (let n = 2; n <= 9; n++) {
+      const candidate = `${wanted.slice(0, 2)}${n}`;
+      if (!inUse.has(candidate)) return candidate;
+    }
+    return wanted;
   }
 
   // ----- Sets -----

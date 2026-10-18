@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { AnswerOption, Letter } from '@replay/shared';
 import { Phone, PhoneTopRow, PlayerCard, StatusLine } from '../ui/frames';
 import { AnswerButton, SegmentTimer, type AnswerState } from '../ui/game';
@@ -13,10 +14,12 @@ export interface RoundPhoneProps {
   clipSeconds: number;
   onPick: (letter: Letter) => void;
   onOptions?: () => void;
+  /** Extra content under the answers, e.g. the public top-3 strip. */
+  footer?: ReactNode;
 }
 
 export function RoundPhone(props: RoundPhoneProps) {
-  const { context, player, options, picked, secondsLeft, clipSeconds, onPick, onOptions } = props;
+  const { context, player, options, picked, secondsLeft, clipSeconds, onPick, onOptions, footer } = props;
 
   const stateFor = (letter: Letter): AnswerState => {
     if (picked === null) return 'idle';
@@ -39,6 +42,7 @@ export function RoundPhone(props: RoundPhoneProps) {
           <AnswerButton key={option.letter} option={option} state={stateFor(option.letter)} onPick={picked ? undefined : onPick} />
         ))}
       </div>
+      {footer}
       <StatusLine tone={picked ? 'good' : 'dim'}>{picked ? `LOCKED IN: ${picked}` : 'PRESS A BUTTON'}</StatusLine>
     </Phone>
   );

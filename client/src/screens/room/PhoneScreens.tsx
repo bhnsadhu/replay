@@ -18,7 +18,15 @@ export function savedInitials(): string {
   }
 }
 
-function saveInitials(v: string): void {
+export function hasSavedInitials(): boolean {
+  try {
+    return /^[A-Z]{3}$/.test(window.localStorage.getItem(INITIALS_KEY) ?? '');
+  } catch {
+    return false;
+  }
+}
+
+export function saveInitials(v: string): void {
   try {
     window.localStorage.setItem(INITIALS_KEY, v);
   } catch {
