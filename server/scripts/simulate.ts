@@ -149,10 +149,12 @@ async function main(): Promise<void> {
   const kicked = await phones[1]!.got('room:closed', () => true);
   check(kicked.reason.includes('removed'), 'host can remove a player');
 
+  host.send({ t: 'room:leave' }); // What the real page sends on close (see client useRoom).
   host.ws.close();
   const afterHostLeft = await tv.next('room:state', (m) => m.room.hostId !== lobby.you, 5000);
   check(afterHostLeft.room.hostId !== null, 'host role passes on when the host leaves');
 
+  tv.send({ t: 'room:leave' });
   tv.ws.close();
   const closed = await phones[2]!.got('room:closed', () => true);
   check(closed.reason.includes('TV'), 'room closes for everyone when the TV leaves');

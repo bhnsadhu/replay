@@ -112,8 +112,15 @@ export function useRoom() {
       if (msg.t === 'reveal' || msg.t === 'gameOver' || msg.t === 'room:closed') player().stop();
       dispatch({ type: 'server', msg, toLocal: (t) => connection.toLocal(t) });
     });
+    // Tell the server right away when the page closes. Through the hosting proxy a closed
+    // connection is only noticed after 10–20 s, which would leave a ghost player in the room.
+    const onPageHide = () => {
+      if (latest.current.status === 'in') connection.send({ t: 'room:leave' });
+    };
+    window.addEventListener('pagehide', onPageHide);
     return () => {
       off();
+      window.removeEventListener('pagehide', onPageHide);
       playerRef.current?.stop();
       if (latest.current.status === 'in') connection.send({ t: 'room:leave' });
     };
