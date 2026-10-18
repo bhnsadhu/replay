@@ -15,6 +15,7 @@ import { NO_RESULT } from '../solo/breakdown';
 import { hasSavedInitials, saveInitials, savedInitials } from '../room/PhoneScreens';
 import { boardRows, ordinal } from '../room/board';
 import { pad2, timerSegments } from '../format';
+import { ConnectionBanners } from '../../ui/banners';
 
 const mixLabel = (id: MixId) => MIXES.find((m) => m.id === id)?.label ?? id;
 const nextMix = (view: PublicView) => PUBLIC_MIX_ORDER[(PUBLIC_MIX_ORDER.indexOf(view.mix) + (view.phase === 'intermission' ? 0 : 1)) % PUBLIC_MIX_ORDER.length]!;
@@ -29,6 +30,15 @@ function publicBoard(board: BoardEntry[], you: string): { rows: ScoreRow[]; foot
 
 export function PublicApp() {
   const api = usePublic();
+  return (
+    <>
+      <PublicScreen api={api} />
+      <ConnectionBanners inGame={api.state.status === 'in'} needsSoundTap={api.needsSoundTap} onTapSound={api.unlockAudio} />
+    </>
+  );
+}
+
+function PublicScreen({ api }: { api: ReturnType<typeof usePublic> }) {
   const { state } = api;
   const isPhone = useIsPhone();
   const now = useNow(200);
@@ -36,6 +46,17 @@ export function PublicApp() {
   const { view, round, reveal, over, you } = state;
 
   if (state.status !== 'in' || !view || !you) {
+    if (state.resuming) {
+      return (
+        <Phone>
+          <PhoneTopRow context="PUBLIC" status="stop" />
+          <div className="error-box">
+            <p className="error-box__title display">REJOINING…</p>
+            <p>Getting your seat back.</p>
+          </div>
+        </Phone>
+      );
+    }
     return (
       <PublicJoin
         initials={initials}

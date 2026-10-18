@@ -3,6 +3,7 @@ import type { BestScore, Letter, PublicView, ServerMessage } from '@replay/share
 import { connection } from '../net/connection';
 import { serverBaseUrl } from '../net/serverUrl';
 import { ClipPlayer } from '../audio/clipPlayer';
+import { clearSeat, loadSeat, saveSeat } from '../net/seat';
 import type { GameOver, Reveal, RoundStart } from './useSoloGame';
 
 export interface PublicState {
@@ -14,19 +15,23 @@ export interface PublicState {
   over: GameOver | null;
   streak: number;
   error: string | null;
+  resuming: boolean;
 }
 
 type Action =
   | { type: 'pending' }
+  | { type: 'resuming' }
   | { type: 'pick'; letter: Letter }
   | { type: 'server'; msg: ServerMessage; toLocal: (t: number) => number };
 
-const INITIAL: PublicState = { status: 'idle', view: null, you: null, round: null, reveal: null, over: null, streak: 0, error: null };
+const INITIAL: PublicState = { status: 'idle', view: null, you: null, round: null, reveal: null, over: null, streak: 0, error: null, resuming: false };
 
 function reducer(state: PublicState, action: Action): PublicState {
   switch (action.type) {
     case 'pending':
       return { ...state, status: 'pending', error: null };
+    case 'resuming':
+      return { ...state, resuming: true, error: null };
     case 'pick':
       return state.round && state.round.picked === null ? { ...state, round: { ...state.round, picked: action.letter } } : state;
     case 'server': {
@@ -34,7 +39,7 @@ function reducer(state: PublicState, action: Action): PublicState {
       switch (msg.t) {
         case 'public:state': {
           const newSet = msg.view.phase === 'playing' && state.view !== null && msg.view.set !== state.view.set;
-          const next = { ...state, status: 'in' as const, view: msg.view, you: msg.you, error: null };
+          const next = { ...state, status: 'in' as const, view: msg.view, you: msg.you, error: null, resuming: false };
           return newSet ? { ...next, round: null, reveal: null, over: null, streak: 0 } : next;
         }
         case 'roundStart':
@@ -51,6 +56,7 @@ function reducer(state: PublicState, action: Action): PublicState {
         case 'gameOver':
           return { ...state, over: msg, round: null };
         case 'error':
+          if (msg.code === 'resume_failed') return { ...INITIAL };
           return { ...state, status: state.status === 'pending' ? 'idle' : state.status, error: msg.message };
         default:
           return state;
@@ -63,7 +69,8 @@ function reducer(state: PublicState, action: Action): PublicState {
 export function usePublic() {
   const [state, dispatch] = useReducer(reducer, INITIAL);
   const playerRef = useRef<ClipPlayer | null>(null);
-  const player = useCallback(() => (playerRef.current ??= new ClipPlayer()), []);
+  const [soundOk, setSoundOk] = useState(false);
+  const player = useCallback(() => (playerRef.current ??= new ClipPlayer(setSoundOk)), []);
   const latest = useRef(state);
   useLayoutEffect(() => {
     latest.current = state;
@@ -78,21 +85,39 @@ export function usePublic() {
       if (msg.t === 'reveal' || msg.t === 'gameOver') player().stop();
       dispatch({ type: 'server', msg, toLocal: (t) => connection.toLocal(t) });
     });
-    const leave = () => {
-      if (latest.current.status === 'in') connection.send({ t: 'public:leave' });
+    // Keep this tab's seat across reloads and dropped connections (PLAN.md §5).
+    const offSeat = connection.onMessage((msg) => {
+      if (msg.t === 'public:state') saveSeat({ kind: 'public', token: msg.token });
+      if (msg.t === 'error' && msg.code === 'resume_failed') clearSeat();
+    });
+    const tryResume = () => {
+      const seat = loadSeat();
+      if (seat?.kind !== 'public') return;
+      if (connection.send({ t: 'public:resume', token: seat.token })) dispatch({ type: 'resuming' });
     };
-    window.addEventListener('pagehide', leave);
+    if (connection.status === 'online') tryResume();
+    const offStatus = connection.onStatus((st) => st === 'online' && tryResume());
+    const away = () => {
+      if (latest.current.status === 'in') connection.send({ t: 'public:away' });
+    };
+    window.addEventListener('pagehide', away);
     return () => {
       off();
-      window.removeEventListener('pagehide', leave);
+      offSeat();
+      offStatus();
+      window.removeEventListener('pagehide', away);
       playerRef.current?.stop();
-      leave();
+      if (latest.current.status === 'in') {
+        connection.send({ t: 'public:leave' });
+        clearSeat();
+      }
     };
   }, [player]);
 
   const actions = useMemo(
     () => ({
       /** Must be called from a tap: it also unlocks sound for the session. */
+      unlockAudio: () => player().unlock(),
       join: (initials: string) => {
         player().unlock();
         if (connection.send({ t: 'public:join', initials })) dispatch({ type: 'pending' });
@@ -107,7 +132,7 @@ export function usePublic() {
     [player],
   );
 
-  return { state, ...actions };
+  return { state, needsSoundTap: state.status === 'in' && !soundOk, ...actions };
 }
 
 /** Live public-room numbers for the home screen. */

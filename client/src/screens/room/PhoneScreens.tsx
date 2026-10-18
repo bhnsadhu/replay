@@ -228,7 +228,13 @@ export function HostPhone({ room, you, error, onRules, onKick, onStart }: HostPr
             <li key={p.id} className="host-players__row">
               <span className="host-players__slot">P{p.slot}</span>
               <span>{p.initials}</span>
-              <span className={p.ready ? 'host-players__tag host-players__tag--ready' : 'host-players__tag'}>{p.ready ? 'READY' : 'NOT READY'}</span>
+              <span
+                className={
+                  !p.connected ? 'host-players__tag host-players__tag--away' : p.ready ? 'host-players__tag host-players__tag--ready' : 'host-players__tag'
+                }
+              >
+                {!p.connected ? 'AWAY' : p.ready ? 'READY' : 'NOT READY'}
+              </span>
               <button type="button" className="host-players__kick" aria-label={`Remove ${p.initials}`} onClick={() => onKick(p.id)}>
                 ✕
               </button>

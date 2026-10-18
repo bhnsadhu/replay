@@ -122,8 +122,12 @@ export function LobbyTv({ room }: { room: RoomView }) {
               <li key={i} className={p ? 'slots__row' : 'slots__row slots__row--empty'}>
                 <span className="slots__slot">P{i + 1}</span>
                 <span>{p ? p.initials : 'PRESS START'}</span>
-                <span className={p?.id === room.hostId ? 'slots__tag slots__tag--host' : 'slots__tag slots__tag--ready'}>
-                  {p?.id === room.hostId ? 'HOST' : p?.ready ? 'READY' : ''}
+                <span
+                  className={
+                    p && !p.connected ? 'slots__tag slots__tag--away' : p?.id === room.hostId ? 'slots__tag slots__tag--host' : 'slots__tag slots__tag--ready'
+                  }
+                >
+                  {p && !p.connected ? 'AWAY' : p?.id === room.hostId ? 'HOST' : p?.ready ? 'READY' : ''}
                 </span>
               </li>
             ))}

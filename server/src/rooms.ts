@@ -500,7 +500,7 @@ export function handleRoomMessage(session: Session, msg: ClientMessage): boolean
       const room = rooms.get(msg.code);
       if (session.room && session.room !== room) session.room.remove(session);
       if (!room || !room.resume(session, msg.token)) {
-        sendError(session, 'resume_failed', 'That seat is gone. Join the room again.');
+        sendError(session, 'resume_failed', 'Your seat is gone: the room closed, or you were away for over a minute. Check the code on the TV and join again.');
       }
       return true;
     }

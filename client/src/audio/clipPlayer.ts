@@ -34,9 +34,18 @@ export class ClipPlayer {
   private playingAt: number | null = null;
   blocked = false;
 
-  constructor() {
+  /** `onSound(ok)` reports whether this device may play sound (false until a tap unlocks it). */
+  constructor(private readonly onSound: (ok: boolean) => void = () => undefined) {
     this.el = new Audio();
     this.el.preload = 'auto';
+  }
+
+  private reportPlayError(err: unknown): void {
+    // NotAllowedError means the browser wants a tap first. AbortError just means a newer clip replaced this one.
+    if (err instanceof DOMException && err.name === 'NotAllowedError') {
+      this.blocked = true;
+      this.onSound(false);
+    }
   }
 
   /** Call from a tap/click handler. */
@@ -47,10 +56,9 @@ export class ClipPlayer {
       .then(() => {
         this.el.pause();
         this.blocked = false;
+        this.onSound(true);
       })
-      .catch(() => {
-        this.blocked = true;
-      });
+      .catch((err) => this.reportPlayError(err));
   }
 
   /** Starts downloading a clip and schedules it to play at `localStartAt` (Date.now() timeline). */
@@ -67,6 +75,7 @@ export class ClipPlayer {
 
     this.el.onplaying = () => {
       if (this.playingAt !== null) return;
+      this.onSound(true);
       // Timed from the round's start, not from when this device began playing.
       this.playingAt = performance.now() - offsetMs;
       this.stopTimer = window.setTimeout(() => this.el.pause(), durationMs - offsetMs);
@@ -77,9 +86,7 @@ export class ClipPlayer {
       if (offsetMs >= durationMs) return;
       const seekAndPlay = () => {
         this.el.currentTime = offsetMs / 1000;
-        this.el.play().catch(() => {
-          this.blocked = true;
-        });
+        this.el.play().catch((err) => this.reportPlayError(err));
       };
       // iPhone Safari ignores seeking before the clip's metadata has loaded.
       if (offsetMs > 250 && this.el.readyState < HTMLMediaElement.HAVE_METADATA) {

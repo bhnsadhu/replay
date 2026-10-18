@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { playsSound, type Letter, type RoomRole, type RoomRules, type RoomView, type ServerMessage } from '@replay/shared';
 import { connection } from '../net/connection';
 import { serverBaseUrl } from '../net/serverUrl';
 import { ClipPlayer } from '../audio/clipPlayer';
+import { clearSeat, loadSeat, saveSeat } from '../net/seat';
 import type { GameOver, Reveal, RoundStart } from './useSoloGame';
 
 export interface RoomState {
@@ -17,10 +18,13 @@ export interface RoomState {
   streak: number;
   error: string | null;
   closedReason: string | null;
+  /** Trying to get this tab's seat back after a reload or dropped connection. */
+  resuming: boolean;
 }
 
 type Action =
   | { type: 'pending' }
+  | { type: 'resuming' }
   | { type: 'pick'; letter: Letter }
   | { type: 'clearError' }
   | { type: 'server'; msg: ServerMessage; toLocal: (t: number) => number };
@@ -36,12 +40,15 @@ const INITIAL: RoomState = {
   streak: 0,
   error: null,
   closedReason: null,
+  resuming: false,
 };
 
 function reducer(state: RoomState, action: Action): RoomState {
   switch (action.type) {
     case 'pending':
       return { ...state, status: 'pending', error: null };
+    case 'resuming':
+      return { ...state, resuming: true, error: null };
     case 'clearError':
       return { ...state, error: null };
     case 'pick':
@@ -51,7 +58,7 @@ function reducer(state: RoomState, action: Action): RoomState {
       switch (msg.t) {
         case 'room:state': {
           const startingFresh = msg.room.phase !== 'playing' || state.room?.phase !== 'playing';
-          const next = { ...state, status: 'in' as const, room: msg.room, role: msg.role, you: msg.you, error: null };
+          const next = { ...state, status: 'in' as const, room: msg.room, role: msg.role, you: msg.you, error: null, resuming: false };
           if (msg.room.phase === 'lobby') return { ...next, round: null, reveal: null, over: null, streak: 0 };
           if (msg.room.phase === 'playing' && startingFresh) return { ...next, round: null, reveal: null, over: null, streak: 0 };
           return next;
@@ -79,6 +86,8 @@ function reducer(state: RoomState, action: Action): RoomState {
         case 'room:closed':
           return { ...INITIAL, status: 'closed', closedReason: msg.reason };
         case 'error':
+          // The seat couldn't be resumed: back to joining, with a note on why.
+          if (msg.code === 'resume_failed') return { ...INITIAL, error: msg.message };
           return { ...state, status: state.status === 'pending' ? 'idle' : state.status, error: msg.message };
         default:
           return state;
@@ -91,7 +100,9 @@ function reducer(state: RoomState, action: Action): RoomState {
 export function useRoom() {
   const [state, dispatch] = useReducer(reducer, INITIAL);
   const playerRef = useRef<ClipPlayer | null>(null);
-  const player = useCallback(() => (playerRef.current ??= new ClipPlayer()), []);
+  /** Whether this device has sound permission (it needs a tap after a reload). */
+  const [soundOk, setSoundOk] = useState(false);
+  const player = useCallback(() => (playerRef.current ??= new ClipPlayer(setSoundOk)), []);
   const latest = useRef(state);
   useLayoutEffect(() => {
     latest.current = state;
@@ -112,17 +123,38 @@ export function useRoom() {
       if (msg.t === 'reveal' || msg.t === 'gameOver' || msg.t === 'room:closed') player().stop();
       dispatch({ type: 'server', msg, toLocal: (t) => connection.toLocal(t) });
     });
-    // Tell the server right away when the page closes. Through the hosting proxy a closed
-    // connection is only noticed after 10–20 s, which would leave a ghost player in the room.
+    // Seats survive reloads and dropped connections (PLAN.md §5): remember ours, and ask for it back
+    // whenever the connection comes (back) up.
+    const offSeat = connection.onMessage((msg) => {
+      if (msg.t === 'room:state') saveSeat({ kind: 'room', code: msg.room.code, token: msg.token, role: msg.role });
+      if (msg.t === 'room:closed' || (msg.t === 'error' && msg.code === 'resume_failed')) clearSeat();
+    });
+    const tryResume = () => {
+      const seat = loadSeat();
+      if (seat?.kind !== 'room') return;
+      if (connection.send({ t: 'room:resume', code: seat.code, token: seat.token })) dispatch({ type: 'resuming' });
+    };
+    if (connection.status === 'online') tryResume();
+    const offStatus = connection.onStatus((s) => s === 'online' && tryResume());
+
+    // Closing or reloading the page: tell the server right away (the proxy is slow to notice a
+    // closed connection), but as "away" so the seat is held in case it's a reload.
     const onPageHide = () => {
-      if (latest.current.status === 'in') connection.send({ t: 'room:leave' });
+      if (latest.current.status === 'in') connection.send({ t: 'room:away' });
     };
     window.addEventListener('pagehide', onPageHide);
     return () => {
       off();
+      offSeat();
+      offStatus();
       window.removeEventListener('pagehide', onPageHide);
       playerRef.current?.stop();
-      if (latest.current.status === 'in') connection.send({ t: 'room:leave' });
+      // Navigating away inside the app (BACK TO HOME) is leaving on purpose. (Only when actually in a
+      // room: React's dev-mode double mount runs this cleanup before anything happened.)
+      if (latest.current.status === 'in') {
+        connection.send({ t: 'room:leave' });
+        clearSeat();
+      }
     };
   }, [player]);
 
@@ -181,7 +213,10 @@ export function useRoom() {
     [unlockAudio, send, player],
   );
 
-  return { state, ...actions };
+  const needsSoundTap =
+    state.status === 'in' && state.room !== null && state.role !== null && playsSound(state.role, state.room.rules.sound) && !soundOk;
+
+  return { state, needsSoundTap, ...actions };
 }
 
 export type RoomApi = ReturnType<typeof useRoom>;
