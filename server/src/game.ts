@@ -79,6 +79,9 @@ export class Game {
   private paused: 'round' | 'between' | null = null;
   /** A round that became ready while paused, started on resume. */
   private pendingStart: PreparedRound | null = null;
+  private pendingReplace = false;
+  /** Waiting for the next song to be ready (so a skip or resume can't start two at once). */
+  private advancing = false;
 
   constructor(
     private readonly settings: GameSettings,
@@ -123,13 +126,35 @@ export class Game {
     if (this.pendingStart) {
       const prepared = this.pendingStart;
       this.pendingStart = null;
-      this.startRound(prepared);
+      this.startRound(prepared, { replace: this.pendingReplace });
     } else if (was === 'round' && this.current) {
       const { roundId, question, track } = this.current;
       this.startRound({ roundId, question, track }, { replay: true });
     } else {
       this.after(1000, () => void this.advance());
     }
+  }
+
+  /**
+   * Host's SKIP SONG. During a round: drop it (nobody scores) and play a different song in its place.
+   * During a reveal: move on right away. Returns false when there's nothing to skip.
+   */
+  skip(): boolean {
+    if (this.paused || this.disposed || this.advancing) return false;
+    const round = this.current;
+    if (!round) return false;
+    for (const timer of this.timers) clearTimeout(timer);
+    this.timers.clear();
+    if (round.revealed) {
+      void this.advance();
+      return true;
+    }
+    round.revealed = true; // No more answers, and its time-up timer is gone.
+    this.current = null;
+    this.currentStart = null;
+    this.owner.send(() => ({ t: 'roundSkipped', roundId: round.roundId }));
+    void this.startNext({ replace: true });
+    return true;
   }
 
   get isPaused(): boolean {
@@ -199,12 +224,14 @@ export class Game {
     return null;
   }
 
-  private startRound(prepared: PreparedRound, { replay = false } = {}): void {
+  /** `replay`: the same round again after a pause. `replace`: a different song in a skipped round's place. */
+  private startRound(prepared: PreparedRound, { replay = false, replace = false } = {}): void {
     if (this.paused) {
       this.pendingStart = prepared;
+      this.pendingReplace = replace;
       return;
     }
-    if (!replay) this.index += 1;
+    if (!replay && !replace) this.index += 1;
     const { clipMs, rounds } = this.settings;
     const startAt = Date.now() + PRELOAD_MS;
     this.current = { ...prepared, startAt, guesses: new Map(), revealed: false };
@@ -339,13 +366,26 @@ export class Game {
       this.owner.onFinished();
       return;
     }
-    const prepared = await this.next;
-    if (this.disposed) return;
-    if (!prepared) {
-      this.owner.onFailed('Could not load the next song. Try again in a moment.');
-      return;
+    await this.startNext({ replace: false });
+  }
+
+  private async startNext({ replace }: { replace: boolean }): Promise<void> {
+    if (this.advancing) return;
+    this.advancing = true;
+    try {
+      // The song prepared during the last round, or (after a skip on the last round) a fresh one.
+      const pending = this.next ?? this.prepare().catch(() => null);
+      this.next = null;
+      const prepared = await pending;
+      if (this.disposed) return;
+      if (!prepared) {
+        this.owner.onFailed('Could not load the next song. Try again in a moment.');
+        return;
+      }
+      this.startRound(prepared, { replace });
+    } finally {
+      this.advancing = false;
     }
-    this.startRound(prepared);
   }
 
   private after(ms: number, fn: () => void): void {

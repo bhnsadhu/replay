@@ -114,6 +114,7 @@ Not drawn yet, but specified by rules: the remote versions of reveal and game ov
 - When HOST A ROOM is tapped on a phone, that phone is the host and `sound` starts as `"all"`.
 - If the host leaves, host passes to the next player by join order. If the host only drops (reload, lost signal), they keep the role for 10 s first.
 - The host phone gets PAUSE, SKIP SONG and END during the game. Tapping the room code copies an invite link.
+  - They live in the options sheet (gear). SKIP SONG during a round drops it unscored and plays a different song as the same round; during a reveal it moves on right away. A host pause survives the TV dropping and coming back; only the host resumes it.
 - If the TV drops, the room pauses until it reconnects (the interrupted round replays from the top). The room closes if the TV is gone for 60 s. Abrupt drops are noticed by a 12 s server heartbeat.
 
 **Players**

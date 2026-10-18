@@ -45,9 +45,11 @@ export interface RoomView {
   players: RoomPlayerView[];
   /** The REPLAY? vote after a game, or null when none is running. */
   vote: RoomVote | null;
-  /** The TV dropped mid-game in TV-sound mode: the round is on hold until it's back. */
-  paused: boolean;
+  /** Why the game is on hold, or null while it runs. "tv": the TV dropped (TV-sound mode). "host": the host paused. */
+  paused: PauseReason | null;
 }
+
+export type PauseReason = 'host' | 'tv';
 
 export interface RoomVote {
   /** Server time when the vote closes. */

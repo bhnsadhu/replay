@@ -88,6 +88,8 @@ export class Room {
   private readonly players = new Map<string, RoomPlayer>();
   private hostId: string | null = null;
   private hostTimer: NodeJS.Timeout | null = null;
+  /** The host pressed PAUSE (separate from the TV-drop pause, so the TV coming back doesn't undo it). */
+  private hostPaused = false;
   private phase: RoomPhase = 'lobby';
   private rules: RoomRules;
   private game: Game | null = null;
@@ -147,7 +149,7 @@ export class Room {
       session.playerId = null;
       if (this.tvGoneTimer) clearTimeout(this.tvGoneTimer);
       this.tvGoneTimer = null;
-      this.game?.resume();
+      if (!this.hostPaused) this.game?.resume();
       this.broadcastState();
       const live = this.game?.roundInProgress();
       if (live) session.send(live);
@@ -311,6 +313,19 @@ export class Room {
         this.endGame();
         return;
 
+      case 'room:pause':
+        if (!isHost) return sendError(session, 'not_host', 'Only the host can pause the game.');
+        if (this.phase !== 'playing' || !this.game) return;
+        this.hostPaused = msg.paused;
+        if (msg.paused) this.game.pause();
+        else if (!this.waitingForTv()) this.game.resume();
+        return this.broadcastState();
+
+      case 'room:skip':
+        if (!isHost) return sendError(session, 'not_host', 'Only the host can skip a song.');
+        if (this.phase === 'playing') this.game?.skip();
+        return;
+
       case 'vote':
         if (!this.vote || !player?.session) return;
         if (msg.replay) this.vote.yes.add(player.id);
@@ -372,7 +387,13 @@ export class Room {
     return true;
   }
 
+  /** TV-sound games can't run without the TV. */
+  private waitingForTv(): boolean {
+    return this.rules.sound === 'tv' && this.tv === null;
+  }
+
   private endGame(): void {
+    this.hostPaused = false;
     this.cancelVote();
     this.game?.dispose();
     this.game = null;
@@ -430,7 +451,7 @@ export class Room {
       tvReady: this.tvReady,
       rules: this.rules,
       vote: this.vote ? { endsAt: this.vote.endsAt, yes: [...this.vote.yes], total: this.connectedPlayers().length } : null,
-      paused: this.game?.isPaused ?? false,
+      paused: this.game?.isPaused ? (this.waitingForTv() ? 'tv' : 'host') : null,
       players: [...this.players.values()]
         .sort((a, b) => a.slot - b.slot)
         .map((p) => ({
@@ -516,6 +537,8 @@ export function handleRoomMessage(session: Session, msg: ClientMessage): boolean
     case 'room:kick':
     case 'room:start':
     case 'room:end':
+    case 'room:pause':
+    case 'room:skip':
     case 'tv:soundOn':
     case 'vote':
       if (session.room) session.room.handle(session, msg);

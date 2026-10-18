@@ -65,4 +65,15 @@ describe('parseClientMessage', () => {
   it('rejects oversized messages', () => {
     expect(parseClientMessage(JSON.stringify({ t: 'echo', text: 'x'.repeat(5000) }))).toBeNull();
   });
+
+  it('parses the host controls', () => {
+    expect(parseClientMessage('{"t":"room:pause","paused":true}')).toEqual({ t: 'room:pause', paused: true });
+    expect(parseClientMessage('{"t":"room:pause","paused":"yes"}')).toBeNull();
+    expect(parseClientMessage('{"t":"room:skip"}')).toEqual({ t: 'room:skip' });
+  });
+
+  it('parses public initials, upper-casing them', () => {
+    expect(parseClientMessage('{"t":"public:initials","initials":"zed"}')).toEqual({ t: 'public:initials', initials: 'ZED' });
+    expect(parseClientMessage('{"t":"public:initials","initials":"Z3D"}')).toBeNull();
+  });
 });

@@ -36,6 +36,10 @@ export type ClientMessage =
   | { t: 'room:start' }
   | { t: 'room:kick'; playerId: string }
   | { t: 'room:end' }
+  /** Host only, during a game. */
+  | { t: 'room:pause'; paused: boolean }
+  /** Host only: drop the current song and play a different one (or cut the reveal short). */
+  | { t: 'room:skip' }
   | { t: 'room:leave' }
   /** The page is closing or reloading: keep the seat (PLAN.md §5), unlike room:leave. */
   | { t: 'room:away' }
@@ -47,6 +51,7 @@ export type ClientMessage =
   | { t: 'public:leave' }
   | { t: 'public:away' }
   | { t: 'public:resume'; token: string }
+  | { t: 'public:initials'; initials: string }
   | { t: 'public:stats' };
 
 export interface RevealedTrack {
@@ -112,6 +117,8 @@ export type ServerMessage =
       durationMs: number;
     }
   | { t: 'guessAck'; roundId: string; choice: Letter }
+  /** The host skipped this song before its reveal: nobody scores, another song follows. */
+  | { t: 'roundSkipped'; roundId: string }
   | { t: 'lockedIn'; roundId: string; count: number; total: number }
   | {
       t: 'reveal';
@@ -127,7 +134,8 @@ export type ServerMessage =
       nextAt: number | null;
     }
   | { t: 'gameOver'; board: BoardEntry[]; awards: Awards; you: FinalStats | null }
-  | { t: 'public:state'; view: PublicView; you: string; token: string }
+  /** `initials`: yours, after any renaming of duplicates (AAA → AA2). */
+  | { t: 'public:state'; view: PublicView; you: string; initials: string; token: string }
   | { t: 'public:stats'; online: number; best: BestScore[] };
 
 export type ErrorCode =
@@ -213,6 +221,10 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       return { t: 'room:start' };
     case 'room:end':
       return { t: 'room:end' };
+    case 'room:pause':
+      return typeof msg.paused === 'boolean' ? { t: 'room:pause', paused: msg.paused } : null;
+    case 'room:skip':
+      return { t: 'room:skip' };
     case 'room:away':
       return { t: 'room:away' };
     case 'room:resume': {
@@ -231,6 +243,10 @@ export function parseClientMessage(raw: string): ClientMessage | null {
     }
     case 'public:leave':
       return { t: 'public:leave' };
+    case 'public:initials': {
+      const initials = upper(msg.initials);
+      return isInitials(initials) ? { t: 'public:initials', initials } : null;
+    }
     case 'public:stats':
       return { t: 'public:stats' };
     case 'vote':

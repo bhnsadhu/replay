@@ -101,6 +101,9 @@ wss.on('connection', (ws) => {
           session.send({ t: 'error', code: 'resume_failed', message: 'That seat is gone. Press start to join again.' });
         }
         return;
+      case 'public:initials':
+        publicRoom.setInitials(session, msg.initials);
+        return;
       case 'public:stats':
         session.send({ t: 'public:stats', ...publicRoom.stats() });
         return;

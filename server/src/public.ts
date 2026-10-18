@@ -130,6 +130,15 @@ class PublicRoom {
     return [...this.players.values()].filter((p) => p.session !== null);
   }
 
+  /** New initials from the options screen; they show on the board from the next reveal. */
+  setInitials(session: Session, initials: string): void {
+    const player = session.inPublic && session.playerId ? this.players.get(session.playerId) : undefined;
+    if (!player) return;
+    const inUse = new Set([...this.players.values()].filter((p) => p !== player).map((p) => p.initials));
+    player.initials = uniqueInitials(initials, inUse);
+    this.broadcastState();
+  }
+
   guess(session: Session, roundId: string, choice: Letter, elapsedMs: number): void {
     if (session.inPublic && session.playerId) this.game?.guess(session.playerId, roundId, choice, elapsedMs);
   }
@@ -235,7 +244,7 @@ class PublicRoom {
 
   private broadcastState(): void {
     const view = this.view();
-    for (const p of this.players.values()) p.session?.send({ t: 'public:state', view, you: p.id, token: p.token });
+    for (const p of this.players.values()) p.session?.send({ t: 'public:state', view, you: p.id, initials: p.initials, token: p.token });
   }
 }
 
