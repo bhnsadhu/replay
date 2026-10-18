@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { REVEAL_MS } from '@replay/shared';
+import { REVEAL_MS, VOTE_MS, type RoomView } from '@replay/shared';
+import { connection } from '../../net/connection';
 import { useRoom } from '../../game/useRoom';
 import { useNow, secondsUntil } from '../../game/clock';
 import { navigate } from '../../router';
@@ -13,6 +14,9 @@ import { GameOverPhone, HostPhone, JoinPhone, LobbyPhone, PhoneMessage } from '.
 import { boardRows, startingBoard } from './board';
 
 const revealSeconds = REVEAL_MS / 1000;
+
+const voteSecondsLeft = (room: RoomView, now: number): number =>
+  room.vote ? secondsUntil(connection.toLocal(room.vote.endsAt), now, VOTE_MS / 1000) : 0;
 
 /** This screen hosts a room and shows the game (PLAN.md §2, party mode). */
 export function TvRoomApp() {
@@ -40,7 +44,7 @@ export function TvRoomApp() {
   if (state.status === 'closed') return <TvMessage title="ROOM CLOSED" sub={state.closedReason ?? ''} footer={home} />;
   if (!room) return <TvMessage title="CONNECTING…" sub="Opening a room for this screen." />;
   if (room.phase === 'lobby') return room.tvReady ? <LobbyTv room={room} /> : <SoundGateTv room={room} onSoundOn={api.soundOn} />;
-  if (room.phase === 'over' && over) return <GameOverTv room={room} over={over} />;
+  if (room.phase === 'over' && over) return <GameOverTv room={room} over={over} voteSecondsLeft={voteSecondsLeft(room, now)} />;
 
   if (reveal && round && reveal.msg.roundId === round.msg.roundId) {
     const secondsToNext = reveal.localNextAt === null ? 0 : secondsUntil(reveal.localNextAt, now, revealSeconds);
@@ -118,7 +122,16 @@ export function PhoneRoomApp({ mode, code }: { mode: 'join' | 'create'; code?: s
   }
 
   if (room.phase === 'over' && over) {
-    return <GameOverPhone room={room} you={you} over={over} onPlayAgain={api.start} onBackToLobby={api.end} />;
+    return (
+      <GameOverPhone
+        room={room}
+        you={you}
+        over={over}
+        voteSecondsLeft={voteSecondsLeft(room, now)}
+        onVote={api.vote}
+        onBackToLobby={api.end}
+      />
+    );
   }
 
   if (reveal && round && reveal.msg.roundId === round.msg.roundId) {

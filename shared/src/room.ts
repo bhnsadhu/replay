@@ -43,6 +43,22 @@ export interface RoomView {
   tvReady: boolean;
   rules: RoomRules;
   players: RoomPlayerView[];
+  /** The REPLAY? vote after a game, or null when none is running. */
+  vote: RoomVote | null;
+}
+
+export interface RoomVote {
+  /** Server time when the vote closes. */
+  endsAt: number;
+  /** Ids of players who voted to replay. */
+  yes: string[];
+  /** Connected players who can vote. */
+  total: number;
+}
+
+/** A majority of connected players must vote yes (PLAN.md §5). */
+export function replayWins(yes: number, connected: number): boolean {
+  return connected > 0 && yes > connected / 2;
 }
 
 export interface BoardEntry {

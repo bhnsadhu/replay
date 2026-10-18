@@ -167,6 +167,7 @@ export function useRoom() {
         send({ t: 'room:start' });
       },
       end: () => send({ t: 'room:end' }),
+      vote: (replay: boolean) => send({ t: 'vote', replay }),
       kick: (playerId: string) => send({ t: 'room:kick', playerId }),
       leave: () => send({ t: 'room:leave' }),
       pick: (letter: Letter) => {

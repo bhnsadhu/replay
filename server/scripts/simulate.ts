@@ -145,6 +145,19 @@ async function main(): Promise<void> {
   await new Promise((r) => setTimeout(r, 300)); // The state update may already be in the inbox.
   check(tv.last('room:state')!.room.phase === 'over', 'room is in the game-over state');
 
+  const voteState = tv.last('room:state')!.room.vote;
+  check(voteState !== null && voteState.total === 5, 'REPLAY? vote opens for the 5 connected players');
+  const voters = phones.filter((p) => p.ws.readyState === WebSocket.OPEN);
+  voters.slice(0, 3).forEach((p) => p.send({ t: 'vote', replay: true }));
+  const partial = await tv.next('room:state', (m) => m.room.vote?.yes.length === 3, 5000);
+  check(partial.room.phase === 'over', '3 of 5 yes votes: still waiting for the rest or the timer');
+  voters.slice(3).forEach((p) => p.send({ t: 'vote', replay: true }));
+  const replay = await tv.next('roundStart', (m) => m.index === 1, 30_000);
+  check(replay.index === 1, 'everyone voted yes: a new game starts right away in the same room');
+  host.send({ t: 'room:end' });
+  const lobbyAgain = await tv.next('room:state', (m) => m.room.phase === 'lobby', 5000);
+  check(lobbyAgain.room.vote === null && lobbyAgain.room.players.length === 5, 'host can send everyone back to the lobby');
+
   host.send({ t: 'room:kick', playerId: tv.last('room:state')!.room.players[1]!.id });
   const kicked = await phones[1]!.got('room:closed', () => true);
   check(kicked.reason.includes('removed'), 'host can remove a player');

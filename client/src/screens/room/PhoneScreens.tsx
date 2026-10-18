@@ -1,10 +1,11 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { CLIP_CHOICES, MAX_PLAYERS, MIXES, ROUND_CHOICES, type MixId, type RoomRules, type RoomView } from '@replay/shared';
 import { Logo, Phone, PhoneTopRow, PlayerCard, StatusLine } from '../../ui/frames';
 import { InitialsPicker, Stepper } from '../../ui/controls';
 import type { GameOver } from '../../game/useSoloGame';
 import { FinalStatGrid } from '../solo/SoloOver';
 import { inviteUrl, ordinal } from './board';
+import { pad2 } from '../format';
 
 const INITIALS_KEY = 'replay.initials';
 
@@ -142,10 +143,19 @@ export function HostPhone({ room, you, error, onRules, onKick, onStart }: HostPr
   const [copied, setCopied] = useState(false);
   const me = room.players.find((p) => p.id === you);
   const others = room.players.filter((p) => p.id !== you);
-  const { rules } = room;
+  // Only the host edits rules, so the last rules this phone sent are the truth. Building each
+  // change on those (not on room.rules, which lags a round trip) keeps fast taps from undoing each other.
+  const sentRules = useRef<RoomRules | null>(null);
+  const [draft, setDraft] = useState<RoomRules | null>(null);
+  const rules = draft ?? room.rules;
   const mixIds = MIXES.map((m) => m.id) as MixId[];
   const sounds = room.tvConnected ? (['tv', 'all'] as const) : (['all'] as const);
-  const set = (patch: Partial<RoomRules>) => onRules({ ...rules, ...patch });
+  const set = (patch: Partial<RoomRules>) => {
+    const next = { ...(sentRules.current ?? room.rules), ...patch };
+    sentRules.current = next;
+    setDraft(next);
+    onRules(next);
+  };
 
   const needsTv = rules.sound === 'tv' && !room.tvReady;
   const ready = others.filter((p) => p.ready).length;
@@ -238,13 +248,15 @@ interface OverProps {
   room: RoomView;
   you: string;
   over: GameOver;
-  onPlayAgain: () => void;
+  voteSecondsLeft: number;
+  onVote: (replay: boolean) => void;
   onBackToLobby: () => void;
 }
 
-export function GameOverPhone({ room, you, over, onPlayAgain, onBackToLobby }: OverProps) {
+export function GameOverPhone({ room, you, over, voteSecondsLeft, onVote, onBackToLobby }: OverProps) {
   const me = room.players.find((p) => p.id === you);
   const isHost = room.hostId === you;
+  const voted = room.vote?.yes.includes(you) ?? false;
   const stats = over.you;
   const [first] = over.board;
   const tiedForLead = stats !== null && first !== undefined && stats.score === first.score;
@@ -278,17 +290,27 @@ export function GameOverPhone({ room, you, over, onPlayAgain, onBackToLobby }: O
         </ol>
       )}
       <div className="over-actions">
-        {isHost ? (
+        {room.vote ? (
           <>
-            <button type="button" className="primary-button display" onClick={onPlayAgain}>
-              PLAY AGAIN
+            <button
+              type="button"
+              className={voted ? 'primary-button primary-button--done display' : 'primary-button display'}
+              aria-pressed={voted}
+              onClick={() => onVote(!voted)}
+            >
+              {voted ? 'VOTED!' : 'REPLAY?'}
             </button>
-            <button type="button" className="secondary-button" onClick={onBackToLobby}>
-              BACK TO LOBBY
-            </button>
+            <StatusLine tone={voted ? 'good' : 'time'}>
+              {room.vote.yes.length}/{room.vote.total} VOTED · {pad2(voteSecondsLeft)}
+            </StatusLine>
           </>
         ) : (
           <StatusLine>WAITING FOR THE HOST</StatusLine>
+        )}
+        {isHost && (
+          <button type="button" className="secondary-button" onClick={onBackToLobby}>
+            BACK TO LOBBY
+          </button>
         )}
       </div>
     </Phone>

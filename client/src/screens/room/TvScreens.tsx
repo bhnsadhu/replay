@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
-import { MIXES, MAX_PLAYERS, REVEAL_MS, type RoomView } from '@replay/shared';
+import { MIXES, MAX_PLAYERS, REVEAL_MS, VOTE_MS, type RoomView } from '@replay/shared';
 import { TvHeader, TvStage } from '../../ui/frames';
 import { AnswerTile, HiScoreBox, SegmentTimer, type AnswerState } from '../../ui/game';
 import { pad2, timerSegments } from '../format';
@@ -175,7 +175,7 @@ export function RevealTv({ room, round, reveal, secondsToNext }: { room: RoomVie
   );
 }
 
-export function GameOverTv({ room, over }: { room: RoomView; over: GameOverMsg }) {
+export function GameOverTv({ room, over, voteSecondsLeft }: { room: RoomView; over: GameOverMsg; voteSecondsLeft: number }) {
   const [first, second] = over.board;
   let summary: string;
   if (!first) summary = 'Nobody played.';
@@ -211,10 +211,19 @@ export function GameOverTv({ room, over }: { room: RoomView; over: GameOverMsg }
         </div>
         <HiScoreBox title="HI-SCORE" rows={boardRows(over.board, 'streak').map((r) => ({ ...r, extra: undefined }))} />
       </div>
-      <div className="tv-footer">
-        <span>THANKS FOR PLAYING</span>
-        <span className="tv-footer__cta display">HOST: PLAY AGAIN ON YOUR PHONE</span>
-      </div>
+      {room.vote ? (
+        <SegmentTimer
+          size="tv"
+          label={`REPLAY? ${room.vote.yes.length}/${room.vote.total}`}
+          lit={timerSegments(voteSecondsLeft, VOTE_MS / 1000)}
+          value={pad2(voteSecondsLeft)}
+        />
+      ) : (
+        <div className="tv-footer">
+          <span>THANKS FOR PLAYING</span>
+          <span className="tv-footer__cta display">HOST: PLAY AGAIN ON YOUR PHONE</span>
+        </div>
+      )}
     </TvStage>
   );
 }

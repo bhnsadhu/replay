@@ -36,7 +36,8 @@ export type ClientMessage =
   | { t: 'room:kick'; playerId: string }
   | { t: 'room:end' }
   | { t: 'room:leave' }
-  | { t: 'tv:soundOn' };
+  | { t: 'tv:soundOn' }
+  | { t: 'vote'; replay: boolean };
 
 export interface RevealedTrack {
   title: string;
@@ -194,6 +195,8 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       return { t: 'room:end' };
     case 'room:leave':
       return { t: 'room:leave' };
+    case 'vote':
+      return typeof msg.replay === 'boolean' ? { t: 'vote', replay: msg.replay } : null;
     case 'tv:soundOn':
       return { t: 'tv:soundOn' };
     default:

@@ -3,6 +3,8 @@ import {
   DEFAULT_RULES,
   MAX_PLAYERS,
   ROOM_CODE_ALPHABET,
+  VOTE_MS,
+  replayWins,
   type ClientMessage,
   type ErrorCode,
   type RoomPhase,
@@ -56,6 +58,7 @@ export class Room {
   private phase: RoomPhase = 'lobby';
   private rules: RoomRules;
   private game: Game | null = null;
+  private vote: { endsAt: number; yes: Set<string>; timer: NodeJS.Timeout } | null = null;
 
   constructor(sound: SoundMode) {
     this.rules = { ...DEFAULT_RULES, sound };
@@ -109,6 +112,10 @@ export class Room {
     }
     if (this.hostId === player.id) this.hostId = this.nextHost();
     if (!this.tv && this.connectedPlayers().length === 0) return this.destroy();
+    if (this.vote) {
+      this.vote.yes.delete(player.id);
+      if (this.everyoneVotedYes()) return this.resolveVote();
+    }
     this.broadcastState();
   }
 
@@ -178,12 +185,20 @@ export class Room {
 
       case 'room:start':
         if (!isHost) return sendError(session, 'not_host', 'Only the host can start the game.');
-        return this.startGame(session);
+        this.startGame(session);
+        return;
 
       case 'room:end':
         if (!isHost) return sendError(session, 'not_host', 'Only the host can end the game.');
         this.endGame();
         return;
+
+      case 'vote':
+        if (!this.vote || !player?.session) return;
+        if (msg.replay) this.vote.yes.add(player.id);
+        else this.vote.yes.delete(player.id);
+        if (this.everyoneVotedYes()) return this.resolveVote();
+        return this.broadcastState();
 
       case 'guess':
         if (player && this.game) this.game.guess(player.id, msg.roundId, msg.choice, msg.elapsedMs);
@@ -194,13 +209,19 @@ export class Room {
     }
   }
 
-  private startGame(session: Session): void {
-    if (this.phase === 'playing') return;
-    if (this.connectedPlayers().length === 0) return sendError(session, 'cannot_start', 'Nobody is in the room yet.');
+  /** Starts a game. `session` gets the error message if it can't start (null when the replay vote starts it). */
+  private startGame(session: Session | null): boolean {
+    if (this.phase === 'playing') return false;
+    if (this.connectedPlayers().length === 0) {
+      if (session) sendError(session, 'cannot_start', 'Nobody is in the room yet.');
+      return false;
+    }
     if (this.rules.sound === 'tv' && !(this.tv && this.tvReady)) {
-      return sendError(session, 'cannot_start', 'Press any key on the TV first so it can play sound.');
+      if (session) sendError(session, 'cannot_start', 'Press any key on the TV first so it can play sound.');
+      return false;
     }
 
+    this.cancelVote();
     this.game?.dispose();
     for (const p of [...this.players.values()]) {
       if (!p.session) this.players.delete(p.id); // Drop players who left during the last game.
@@ -217,6 +238,7 @@ export class Room {
         onFinished: () => {
           if (this.game !== game) return;
           this.phase = 'over';
+          this.startVote();
           this.broadcastState();
         },
         onFailed: (message) => {
@@ -229,14 +251,42 @@ export class Room {
     this.game = game;
     this.broadcastState();
     void game.start();
+    return true;
   }
 
   private endGame(): void {
+    this.cancelVote();
     this.game?.dispose();
     this.game = null;
     this.phase = 'lobby';
     for (const p of [...this.players.values()]) if (!p.session) this.players.delete(p.id);
     this.broadcastState();
+  }
+
+  // ----- REPLAY? vote (PLAN.md §5) -----
+
+  private startVote(): void {
+    this.cancelVote();
+    this.vote = { endsAt: Date.now() + VOTE_MS, yes: new Set(), timer: setTimeout(() => this.resolveVote(), VOTE_MS) };
+  }
+
+  private cancelVote(): void {
+    if (this.vote) clearTimeout(this.vote.timer);
+    this.vote = null;
+  }
+
+  private everyoneVotedYes(): boolean {
+    const connected = this.connectedPlayers();
+    return this.vote !== null && connected.length > 0 && connected.every((p) => this.vote!.yes.has(p.id));
+  }
+
+  /** Majority of connected players said yes: same room, same rules, new game. Otherwise back to the lobby. */
+  private resolveVote(): void {
+    if (!this.vote) return;
+    const connected = this.connectedPlayers();
+    const yes = connected.filter((p) => this.vote!.yes.has(p.id)).length;
+    this.cancelVote();
+    if (!(replayWins(yes, connected.length) && this.startGame(null))) this.endGame();
   }
 
   // ----- Output -----
@@ -261,6 +311,7 @@ export class Room {
       tvConnected: this.tv !== null,
       tvReady: this.tvReady,
       rules: this.rules,
+      vote: this.vote ? { endsAt: this.vote.endsAt, yes: [...this.vote.yes], total: this.connectedPlayers().length } : null,
       players: [...this.players.values()]
         .sort((a, b) => a.slot - b.slot)
         .map((p) => ({
@@ -299,6 +350,7 @@ export class Room {
   }
 
   private destroy(): void {
+    this.cancelVote();
     this.game?.dispose();
     this.game = null;
     rooms.delete(this.code);
@@ -335,6 +387,7 @@ export function handleRoomMessage(session: Session, msg: ClientMessage): boolean
     case 'room:start':
     case 'room:end':
     case 'tv:soundOn':
+    case 'vote':
       if (session.room) session.room.handle(session, msg);
       else sendError(session, 'not_in_game', 'You are not in a room.');
       return true;

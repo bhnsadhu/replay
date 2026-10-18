@@ -10,6 +10,8 @@ export const PRELOAD_MS = 1500;
 export const LATE_GUESS_GRACE_MS = 500;
 /** A device may claim to be at most this much faster than the server saw. Caps cheating. */
 export const MAX_CLAIMED_LAG_MS = 2000;
+/** How long the REPLAY? vote runs after a game (PLAN.md §5). */
+export const VOTE_MS = 10_000;
 
 export const MIXES = [
   { id: 'throwbacks', label: 'THROWBACKS' },
