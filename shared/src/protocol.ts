@@ -3,6 +3,7 @@
 
 import { isMixId, type MixId } from './constants';
 import { LETTERS, type AnswerOption, type Letter } from './game';
+import type { BestScore, PublicView } from './public';
 import {
   CLIP_CHOICES,
   ROUND_CHOICES,
@@ -37,7 +38,11 @@ export type ClientMessage =
   | { t: 'room:end' }
   | { t: 'room:leave' }
   | { t: 'tv:soundOn' }
-  | { t: 'vote'; replay: boolean };
+  | { t: 'vote'; replay: boolean }
+  // Public room
+  | { t: 'public:join'; initials: string }
+  | { t: 'public:leave' }
+  | { t: 'public:stats' };
 
 export interface RevealedTrack {
   title: string;
@@ -109,7 +114,9 @@ export type ServerMessage =
       /** Server time when the next round (or game over) comes; null if it's the last. */
       nextAt: number | null;
     }
-  | { t: 'gameOver'; board: BoardEntry[]; awards: Awards; you: FinalStats | null };
+  | { t: 'gameOver'; board: BoardEntry[]; awards: Awards; you: FinalStats | null }
+  | { t: 'public:state'; view: PublicView; you: string }
+  | { t: 'public:stats'; online: number; best: BestScore[] };
 
 export type ErrorCode =
   | 'bad_message'
@@ -195,6 +202,14 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       return { t: 'room:end' };
     case 'room:leave':
       return { t: 'room:leave' };
+    case 'public:join': {
+      const initials = upper(msg.initials);
+      return isInitials(initials) ? { t: 'public:join', initials } : null;
+    }
+    case 'public:leave':
+      return { t: 'public:leave' };
+    case 'public:stats':
+      return { t: 'public:stats' };
     case 'vote':
       return typeof msg.replay === 'boolean' ? { t: 'vote', replay: msg.replay } : null;
     case 'tv:soundOn':

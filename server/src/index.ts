@@ -6,6 +6,7 @@ import { config, isOriginAllowed } from './config';
 import { serveClip } from './audio';
 import { SoloGame } from './solo';
 import { handleRoomMessage, type Session } from './rooms';
+import { publicRoom } from './public';
 
 const httpServer = createServer((req, res) => {
   const path = new URL(req.url ?? '/', 'http://localhost').pathname;
@@ -50,6 +51,7 @@ wss.on('connection', (ws) => {
     room: null,
     role: null,
     playerId: null,
+    inPublic: false,
   };
 
   let solo: SoloGame | null = null;
@@ -66,6 +68,28 @@ wss.on('connection', (ws) => {
       session.send({ t: 'error', code: 'bad_message', message: 'Message was not understood.' });
       return;
     }
+    // One place at a time: joining a room, the public room or solo leaves the others.
+    switch (msg.t) {
+      case 'public:join':
+        endSolo();
+        session.room?.remove(session);
+        publicRoom.join(session, msg.initials);
+        return;
+      case 'public:leave':
+        publicRoom.leave(session);
+        return;
+      case 'public:stats':
+        session.send({ t: 'public:stats', ...publicRoom.stats() });
+        return;
+      case 'guess':
+        if (session.inPublic) return publicRoom.guess(session, msg.roundId, msg.choice, msg.elapsedMs);
+        break;
+      case 'room:create':
+      case 'room:join':
+        endSolo();
+        publicRoom.leave(session);
+        break;
+    }
     if (handleRoomMessage(session, msg)) return;
 
     switch (msg.t) {
@@ -78,6 +102,7 @@ wss.on('connection', (ws) => {
       case 'solo:start':
         endSolo();
         session.room?.remove(session);
+        publicRoom.leave(session);
         solo = new SoloGame(msg.mix, session.send);
         void solo.start();
         break;
@@ -94,6 +119,7 @@ wss.on('connection', (ws) => {
   ws.on('close', () => {
     endSolo();
     session.room?.remove(session);
+    publicRoom.leave(session);
   });
 });
 

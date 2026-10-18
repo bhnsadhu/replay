@@ -71,6 +71,7 @@ export class Game {
   private readonly stats = new Map<string, PlayerStats>();
   private next: Promise<PreparedRound | null> | null = null;
   private current: LiveRound | null = null;
+  private currentStart: ServerMessage | null = null;
   private nobodyGot: { title: string; artist: string } | null = null;
   private index = 0;
   private disposed = false;
@@ -91,6 +92,11 @@ export class Game {
       console.error('[game] could not start', err);
       if (!this.disposed) this.owner.onFailed('Could not load songs right now. Try again in a moment.');
     }
+  }
+
+  /** The round in progress (for someone joining mid-round), or null between rounds. */
+  roundInProgress(): ServerMessage | null {
+    return this.current && !this.current.revealed ? this.currentStart : null;
   }
 
   scoreOf(playerId: string): number {
@@ -176,6 +182,7 @@ export class Game {
       startAt,
       durationMs: clipMs,
     };
+    this.currentStart = msg;
     this.owner.send(() => msg);
     this.sendLockedIn();
 

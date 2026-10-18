@@ -22,7 +22,9 @@ export interface Session {
   send(msg: ServerMessage): void;
   room: Room | null;
   role: RoomRole | null;
+  /** Your id in a room or in the public room. */
   playerId: string | null;
+  inPublic: boolean;
 }
 
 interface RoomPlayer {
