@@ -3,6 +3,8 @@ import type { Letter, MixId, ServerMessage } from '@replay/shared';
 import { connection } from '../net/connection';
 import { serverBaseUrl } from '../net/serverUrl';
 import { ClipPlayer } from '../audio/clipPlayer';
+import { announceServer } from '../ui/announce';
+import { playRevealSfx, playSfx } from '../audio/sfx';
 
 export type RoundStart = Extract<ServerMessage, { t: 'roundStart' }>;
 export type Reveal = Extract<ServerMessage, { t: 'reveal' }>;
@@ -82,21 +84,34 @@ export function useSoloGame() {
         player().schedule(`${serverBaseUrl()}${msg.audioPath}`, connection.toLocal(msg.startAt), msg.durationMs);
       }
       if (msg.t === 'reveal' || msg.t === 'gameOver' || msg.t === 'error') player().stop();
+      if (msg.t === 'reveal') playRevealSfx(msg.you);
+      if (msg.t === 'gameOver') playSfx('rewind');
+      announceServer(msg);
       dispatch({ type: 'server', msg, toLocal: (t) => connection.toLocal(t) });
     });
   }, []);
 
-  useEffect(() => () => playerRef.current?.stop(), []);
+  useEffect(
+    () => () => {
+      playerRef.current?.dispose();
+      playerRef.current = null;
+    },
+    [],
+  );
 
   const start = useCallback((mix: MixId) => {
     player().unlock(); // Must happen inside the tap.
-    if (connection.send({ t: 'solo:start', mix })) dispatch({ type: 'start', mix });
+    if (connection.send({ t: 'solo:start', mix })) {
+      playSfx('coin');
+      dispatch({ type: 'start', mix });
+    }
   }, []);
 
   const pick = useCallback(
     (letter: Letter) => {
       if (state.phase !== 'round' || state.picked !== null) return;
       connection.send({ t: 'guess', roundId: state.round.roundId, choice: letter, elapsedMs: Math.round(player().elapsedMs()) });
+      playSfx('lock');
       dispatch({ type: 'pick', letter });
     },
     [state],

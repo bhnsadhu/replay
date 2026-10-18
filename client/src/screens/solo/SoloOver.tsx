@@ -1,5 +1,6 @@
 import { MIXES, type FinalStats, type MixId } from '@replay/shared';
-import { Phone, PhoneTopRow, StatusLine } from '../../ui/frames';
+import { Phone, PhoneTopRow, StatusLine, RewindSweep } from '../../ui/frames';
+import { ShareButton } from '../../ui/share';
 
 interface Props {
   stats: FinalStats;
@@ -32,6 +33,7 @@ export function SoloOver({ stats, mix, onReplay, onMenu }: Props) {
   return (
     <Phone>
       <PhoneTopRow context="SOLO · FINAL" status="rew" />
+      <RewindSweep />
       <div className="over-hero">
         <h1 className="over-hero__title display">GAME OVER</h1>
         <span className="over-hero__label">FINAL SCORE</span>
@@ -45,6 +47,7 @@ export function SoloOver({ stats, mix, onReplay, onMenu }: Props) {
         <button type="button" className="secondary-button" onClick={onMenu}>
           CHANGE MIX
         </button>
+        <ShareButton card={{ context: `SOLO · ${MIXES.find((m) => m.id === mix)?.label ?? mix}`, initials: 'YOU', stats }} />
       </div>
       <StatusLine>MAX POSSIBLE 17500</StatusLine>
     </Phone>

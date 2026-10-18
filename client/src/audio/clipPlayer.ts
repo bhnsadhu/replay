@@ -2,6 +2,8 @@
 // Browsers (iPhone Safari especially) only allow sound after a tap, and that permission
 // sticks to the element that was played during the tap. So we "unlock" one element on
 // PRESS START and reuse it for every clip.
+import { getPrefs, onPrefs } from '../prefs';
+import { unlockSfx } from './sfx';
 
 function silentWavUrl(): string {
   const samples = 800; // 0.1 s at 8 kHz, 8-bit mono.
@@ -32,12 +34,18 @@ export class ClipPlayer {
   private localStartAt = 0;
   /** performance.now() when sound actually started, or null if it hasn't (yet). */
   private playingAt: number | null = null;
+  private readonly offPrefs: () => void;
   blocked = false;
 
   /** `onSound(ok)` reports whether this device may play sound (false until a tap unlocks it). */
   constructor(private readonly onSound: (ok: boolean) => void = () => undefined) {
     this.el = new Audio();
     this.el.preload = 'auto';
+    // The SOUND option mutes rather than stops, so the timing stays the same either way.
+    this.el.muted = !getPrefs().sound;
+    this.offPrefs = onPrefs(() => {
+      this.el.muted = !getPrefs().sound;
+    });
   }
 
   private reportPlayError(err: unknown): void {
@@ -50,6 +58,7 @@ export class ClipPlayer {
 
   /** Call from a tap/click handler. */
   unlock(): void {
+    unlockSfx();
     this.el.src = silentWavUrl();
     this.el
       .play()
@@ -116,5 +125,10 @@ export class ClipPlayer {
     window.clearTimeout(this.startTimer);
     window.clearTimeout(this.stopTimer);
     this.el.pause();
+  }
+
+  dispose(): void {
+    this.stop();
+    this.offPrefs();
   }
 }

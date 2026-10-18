@@ -1,11 +1,13 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { CLIP_CHOICES, MAX_PLAYERS, MIXES, ROUND_CHOICES, type MixId, type RoomRules, type RoomView } from '@replay/shared';
-import { Logo, Phone, PhoneTopRow, PlayerCard, StatusLine } from '../../ui/frames';
+import { Logo, Phone, PhoneTopRow, PlayerCard, StatusLine, RewindSweep } from '../../ui/frames';
 import { InitialsPicker, Stepper } from '../../ui/controls';
 import type { GameOver } from '../../game/useSoloGame';
 import { FinalStatGrid } from '../solo/SoloOver';
+import { ShareButton } from '../../ui/share';
 import { inviteUrl, ordinal } from './board';
 import { pad2 } from '../format';
+import type { VhsStatus } from '../../ui/vhs';
 
 const INITIALS_KEY = 'replay.initials';
 
@@ -35,10 +37,18 @@ export function saveInitials(v: string): void {
 }
 
 /** Full-screen phone message: connecting, loading songs, removed from room. */
-export function PhoneMessage({ context, title, children, action }: { context: string; title: string; children?: ReactNode; action?: ReactNode }) {
+interface PhoneMessageProps {
+  context: string;
+  title: string;
+  status?: VhsStatus;
+  children?: ReactNode;
+  action?: ReactNode;
+}
+
+export function PhoneMessage({ context, title, status = 'stop', children, action }: PhoneMessageProps) {
   return (
     <Phone>
-      <PhoneTopRow context={context} status="stop" />
+      <PhoneTopRow context={context} status={status} />
       <div className="error-box">
         <p className="error-box__title display">{title}</p>
         {children}
@@ -283,6 +293,7 @@ export function GameOverPhone({ room, you, over, voteSecondsLeft, onVote, onBack
   return (
     <Phone>
       <PhoneTopRow context={`${room.code} · FINAL`} status="rew" />
+      <RewindSweep />
       <PlayerCard label={`PLAYER ${me?.slot ?? '-'}`} initials={me?.initials ?? '???'} rightLabel="FINAL SCORE" rightValue={String(stats?.score ?? 0)} />
       {stats && (
         <div className="over-hero">
@@ -320,6 +331,16 @@ export function GameOverPhone({ room, you, over, voteSecondsLeft, onVote, onBack
           </>
         ) : (
           <StatusLine>WAITING FOR THE HOST</StatusLine>
+        )}
+        {stats && (
+          <ShareButton
+            card={{
+              context: `ROOM ${room.code} · ${MIXES.find((m) => m.id === room.rules.mix)?.label ?? ''}`,
+              initials: me?.initials ?? '???',
+              stats: { ...stats, rank },
+              players: over.board.length,
+            }}
+          />
         )}
         {isHost && (
           <button type="button" className="secondary-button" onClick={onBackToLobby}>

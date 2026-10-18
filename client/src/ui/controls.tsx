@@ -86,7 +86,7 @@ interface TrackCardProps {
 export function TrackCard({ letter, title, artist, year }: TrackCardProps) {
   const query = encodeURIComponent(`${title} ${artist}`);
   return (
-    <section className="track-card" data-letter={letter} aria-label="The answer">
+    <section className="track-card glitch-in" data-letter={letter} aria-label="The answer">
       <div className="track-card__head">
         <span className="track-card__cap display">{letter}</span>
         <span className="track-card__text">

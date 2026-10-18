@@ -3,6 +3,8 @@ import type { BestScore, Letter, PublicView, ServerMessage } from '@replay/share
 import { connection } from '../net/connection';
 import { serverBaseUrl } from '../net/serverUrl';
 import { ClipPlayer } from '../audio/clipPlayer';
+import { announceServer } from '../ui/announce';
+import { playRevealSfx, playSfx } from '../audio/sfx';
 import { clearSeat, loadSeat, saveSeat } from '../net/seat';
 import type { GameOver, Reveal, RoundStart } from './useSoloGame';
 
@@ -10,6 +12,8 @@ export interface PublicState {
   status: 'idle' | 'pending' | 'in';
   view: PublicView | null;
   you: string | null;
+  /** Your initials as the server has them. */
+  initials: string | null;
   round: { msg: RoundStart; localStartAt: number; picked: Letter | null } | null;
   reveal: { msg: Reveal; localNextAt: number | null; streakBefore: number } | null;
   over: GameOver | null;
@@ -24,7 +28,7 @@ type Action =
   | { type: 'pick'; letter: Letter }
   | { type: 'server'; msg: ServerMessage; toLocal: (t: number) => number };
 
-const INITIAL: PublicState = { status: 'idle', view: null, you: null, round: null, reveal: null, over: null, streak: 0, error: null, resuming: false };
+const INITIAL: PublicState = { status: 'idle', view: null, you: null, initials: null, round: null, reveal: null, over: null, streak: 0, error: null, resuming: false };
 
 function reducer(state: PublicState, action: Action): PublicState {
   switch (action.type) {
@@ -39,7 +43,7 @@ function reducer(state: PublicState, action: Action): PublicState {
       switch (msg.t) {
         case 'public:state': {
           const newSet = msg.view.phase === 'playing' && state.view !== null && msg.view.set !== state.view.set;
-          const next = { ...state, status: 'in' as const, view: msg.view, you: msg.you, error: null, resuming: false };
+          const next = { ...state, status: 'in' as const, view: msg.view, you: msg.you, initials: msg.initials, error: null, resuming: false };
           return newSet ? { ...next, round: null, reveal: null, over: null, streak: 0 } : next;
         }
         case 'roundStart':
@@ -83,6 +87,9 @@ export function usePublic() {
         player().schedule(`${serverBaseUrl()}${msg.audioPath}`, connection.toLocal(msg.startAt), msg.durationMs);
       }
       if (msg.t === 'reveal' || msg.t === 'gameOver') player().stop();
+      if (msg.t === 'reveal' && msg.you) playRevealSfx(msg.you);
+      if (msg.t === 'gameOver') playSfx('rewind');
+      announceServer(msg);
       dispatch({ type: 'server', msg, toLocal: (t) => connection.toLocal(t) });
     });
     // Keep this tab's seat across reloads and dropped connections (PLAN.md §5).
@@ -106,7 +113,8 @@ export function usePublic() {
       offSeat();
       offStatus();
       window.removeEventListener('pagehide', away);
-      playerRef.current?.stop();
+      playerRef.current?.dispose();
+      playerRef.current = null;
       if (latest.current.status === 'in') {
         connection.send({ t: 'public:leave' });
         clearSeat();
@@ -120,12 +128,17 @@ export function usePublic() {
       unlockAudio: () => player().unlock(),
       join: (initials: string) => {
         player().unlock();
-        if (connection.send({ t: 'public:join', initials })) dispatch({ type: 'pending' });
+        if (connection.send({ t: 'public:join', initials })) {
+          playSfx('coin');
+          dispatch({ type: 'pending' });
+        }
       },
+      setInitials: (initials: string) => connection.send({ t: 'public:initials', initials }),
       pick: (letter: Letter) => {
         const round = latest.current.round;
         if (!round || round.picked !== null) return;
         connection.send({ t: 'guess', roundId: round.msg.roundId, choice: letter, elapsedMs: Math.round(player().elapsedMs()) });
+        playSfx('lock');
         dispatch({ type: 'pick', letter });
       },
     }),

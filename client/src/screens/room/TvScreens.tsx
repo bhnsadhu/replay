@@ -1,19 +1,28 @@
 import { useEffect, type ReactNode } from 'react';
 import { MIXES, MAX_PLAYERS, REVEAL_MS, VOTE_MS, type RoomView } from '@replay/shared';
-import { TvHeader, TvStage } from '../../ui/frames';
+import { TvHeader, TvStage, RewindSweep } from '../../ui/frames';
 import { AnswerTile, HiScoreBox, SegmentTimer, type AnswerState } from '../../ui/game';
 import { pad2, timerSegments } from '../format';
 import { RevealHero } from '../solo/SoloReveal';
 import type { GameOver as GameOverMsg, Reveal, RoundStart } from '../../game/useSoloGame';
 import { boardRows, inviteHost } from './board';
+import type { VhsStatus } from '../../ui/vhs';
 
 const mixLabel = (room: RoomView) => MIXES.find((m) => m.id === room.rules.mix)?.label ?? room.rules.mix;
 
 /** Generic full-screen TV message: connecting, loading songs, room closed. */
-export function TvMessage({ title, sub, code, footer }: { title: string; sub?: string; code?: string; footer?: ReactNode }) {
+interface TvMessageProps {
+  title: string;
+  sub?: string;
+  code?: string;
+  status?: VhsStatus;
+  footer?: ReactNode;
+}
+
+export function TvMessage({ title, sub, code, status = 'stop', footer }: TvMessageProps) {
   return (
     <TvStage>
-      <TvHeader status="stop" context="REPLAY" rightLabel={code ? 'ROOM CODE' : ''} rightValue={code ?? ''} />
+      <TvHeader status={status} context="REPLAY" rightLabel={code ? 'ROOM CODE' : ''} rightValue={code ?? ''} />
       <div className="tv-center">
         <p className="tv-center__title display">{title}</p>
         {sub && <p className="tv-center__sub">{sub}</p>}
@@ -197,6 +206,7 @@ export function GameOverTv({ room, over, voteSecondsLeft }: { room: RoomView; ov
   return (
     <TvStage>
       <TvHeader status="rew" context="FINAL" rightLabel="ROOM CODE" rightValue={room.code} />
+      <RewindSweep />
       <div className="tv-body">
         <div className="tv-main">
           <h1 className="over-tv__title display">GAME OVER</h1>

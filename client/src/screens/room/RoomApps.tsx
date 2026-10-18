@@ -6,13 +6,14 @@ import { useRoom, type RoomApi } from '../../game/useRoom';
 import { useNow, secondsUntil } from '../../game/clock';
 import { navigate } from '../../router';
 import { ConnectionBanners } from '../../ui/banners';
+import { OptionsHost, type OptionsConfig } from '../../ui/options';
 import { RoundTv } from '../RoundTv';
 import { RoundPhone } from '../RoundPhone';
 import { pad2 } from '../format';
 import { SoloRevealPhone } from '../solo/SoloReveal';
 import { NO_RESULT } from '../solo/breakdown';
 import { GameOverTv, LobbyTv, RevealTv, SoundGateTv, TvMessage } from './TvScreens';
-import { GameOverPhone, HostPhone, JoinPhone, LobbyPhone, PhoneMessage } from './PhoneScreens';
+import { GameOverPhone, HostPhone, JoinPhone, LobbyPhone, PhoneMessage, saveInitials } from './PhoneScreens';
 import { boardRows, startingBoard } from './board';
 
 const revealSeconds = REVEAL_MS / 1000;
@@ -37,9 +38,14 @@ export function TvRoomApp() {
     return () => window.clearInterval(timer);
   }, [createAsTv]);
 
+  const room = api.state.room;
+  const options: OptionsConfig = { context: room?.code ?? 'REPLAY', leave: { label: 'CLOSE ROOM', onLeave: () => navigate('/') } };
+
   return (
     <>
-      <TvRoomScreen api={api} now={now} />
+      <OptionsHost config={options} floatingGear>
+        <TvRoomScreen api={api} now={now} />
+      </OptionsHost>
       <ConnectionBanners inGame={api.state.status === 'in'} needsSoundTap={api.needsSoundTap} onTapSound={api.unlockAudio} />
     </>
   );
@@ -58,6 +64,7 @@ function TvRoomScreen({ api, now }: { api: RoomApi; now: number }) {
   if (!room) return <TvMessage title={state.resuming ? 'REJOINING…' : 'CONNECTING…'} sub="Opening a room for this screen." />;
   if (room.phase === 'lobby') return room.tvReady ? <LobbyTv room={room} /> : <SoundGateTv room={room} onSoundOn={api.soundOn} />;
   if (room.phase === 'over' && over) return <GameOverTv room={room} over={over} voteSecondsLeft={voteSecondsLeft(room, now)} />;
+  if (room.phase === 'playing' && room.paused === 'host') return <TvMessage title="PAUSED" status="pause" sub="The host paused the game. The round starts over when they resume." code={room.code} />;
 
   if (reveal && round && reveal.msg.roundId === round.msg.roundId) {
     const secondsToNext = reveal.localNextAt === null ? 0 : secondsUntil(reveal.localNextAt, now, revealSeconds);
@@ -81,7 +88,7 @@ function TvRoomScreen({ api, now }: { api: RoomApi; now: number }) {
       />
     );
   }
-  return <TvMessage title="GET READY" sub="Loading the next song…" code={room.code} />;
+  return <TvMessage status="play" title={state.skipped ? '▶▶ SKIPPED' : 'GET READY'} sub={state.skipped ? 'Loading a different song…' : 'Loading the next song…'} code={room.code} />;
 }
 
 /** A phone in a room: joining, lobby, rounds and results. */
@@ -95,12 +102,39 @@ export function PhoneRoomApp({ mode, code }: { mode: 'join' | 'create'; code?: s
     if (mode === 'create' && room && window.location.pathname !== `/${room.code}`) navigate(`/${room.code}`, { replace: true });
   }, [mode, room]);
 
+  const options = phoneOptions(api);
+  const screen = <PhoneRoomScreen api={api} now={now} mode={mode} code={code} />;
+
   return (
     <>
-      <PhoneRoomScreen api={api} now={now} mode={mode} code={code} />
+      {options ? <OptionsHost config={options}>{screen}</OptionsHost> : screen}
       <ConnectionBanners inGame={api.state.status === 'in'} needsSoundTap={api.needsSoundTap} onTapSound={api.unlockAudio} />
     </>
   );
+}
+
+/** Options for a phone in a room; none before it has a seat. */
+function phoneOptions(api: RoomApi): OptionsConfig | null {
+  const { room, you } = api.state;
+  const me = room?.players.find((p) => p.id === you);
+  if (!room || !me) return null;
+  const isHost = room.hostId === me.id;
+  return {
+    context: room.code,
+    initials: {
+      value: me.initials,
+      lockedReason: room.phase === 'lobby' ? null : 'You can change them in the lobby, between games.',
+      onSave: (initials) => {
+        saveInitials(initials);
+        api.setInitials(initials);
+      },
+    },
+    host:
+      isHost && room.phase === 'playing'
+        ? { paused: room.paused === 'host', onPause: api.pause, onSkip: api.skip, onEnd: api.end }
+        : undefined,
+    leave: { label: 'LEAVE ROOM', onLeave: () => navigate('/') },
+  };
 }
 
 function PhoneRoomScreen({ api, now, mode, code }: { api: RoomApi; now: number; mode: 'join' | 'create'; code?: string }) {
@@ -153,9 +187,28 @@ function PhoneRoomScreen({ api, now, mode, code }: { api: RoomApi; now: number; 
   }
 
   if (room.phase === 'playing' && room.paused) {
+    const isHost = room.hostId === you;
+    const byHost = room.paused === 'host';
     return (
-      <PhoneMessage context={`${room.code} · PAUSED`} title="PAUSED">
-        <p>The TV lost its connection. The round will start over when it's back.</p>
+      <PhoneMessage
+        context={`${room.code} · PAUSED`}
+        status="pause"
+        title="PAUSED"
+        action={
+          byHost && isHost ? (
+            <button type="button" className="primary-button display" onClick={() => api.pause(false)}>
+              ▶ RESUME
+            </button>
+          ) : undefined
+        }
+      >
+        <p>
+          {byHost
+            ? isHost
+              ? 'Everyone is waiting on you. The round starts over when you resume.'
+              : 'The host paused the game. The round starts over when they resume.'
+            : "The TV lost its connection. The round will start over when it's back."}
+        </p>
       </PhoneMessage>
     );
   }
@@ -203,6 +256,14 @@ function PhoneRoomScreen({ api, now, mode, code }: { api: RoomApi; now: number; 
         clipSeconds={clipSeconds}
         onPick={api.pick}
       />
+    );
+  }
+
+  if (state.skipped) {
+    return (
+      <PhoneMessage context={`${room.code} · GAME`} status="play" title="▶▶ SKIPPED">
+        <p>The host skipped that song. Loading a different one…</p>
+      </PhoneMessage>
     );
   }
 

@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { vhsGlyph, vhsWord, type VhsStatus } from './vhs';
+import { useOpenOptions } from './optionsContext';
 
 export function Scanlines() {
   return <div className="scanlines" aria-hidden="true" />;
@@ -78,6 +79,8 @@ interface PhoneTopRowProps {
 }
 
 export function PhoneTopRow({ context, status, statusText, onOptions }: PhoneTopRowProps) {
+  const openOptions = useOpenOptions();
+  const onGear = onOptions ?? openOptions ?? undefined;
   return (
     <div className="phone-top">
       <span>{context}</span>
@@ -85,7 +88,7 @@ export function PhoneTopRow({ context, status, statusText, onOptions }: PhoneTop
         <span className="phone-top__status">
           {vhsGlyph(status)} {statusText ?? vhsWord(status)}
         </span>
-        {onOptions && <OptionsButton onClick={onOptions} />}
+        {onGear && <OptionsButton onClick={onGear} />}
       </span>
     </div>
   );
@@ -94,11 +97,17 @@ export function PhoneTopRow({ context, status, statusText, onOptions }: PhoneTop
 export function OptionsButton({ onClick }: { onClick?: () => void }) {
   return (
     <button type="button" className="icon-button" aria-label="Options" onClick={onClick}>
-      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
-        <circle cx="12" cy="12" r="3" />
-        <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" />
-      </svg>
+      <GearIcon />
     </button>
+  );
+}
+
+export function GearIcon() {
+  return (
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" />
+    </svg>
   );
 }
 
@@ -128,8 +137,19 @@ export function PlayerCard({ label, initials, rightLabel, rightValue, rightLabel
 
 export function StatusLine({ children, tone = 'dim' }: { children: ReactNode; tone?: 'dim' | 'good' | 'time' }) {
   return (
-    <p className={`status-line display status-line--${tone}`} role="status">
+    // Not a live region: these often count down every second. Events are read out by ui/announce.ts.
+    <p className={`status-line display status-line--${tone}`}>
       {children}
     </p>
+  );
+}
+
+/** The ◀◀ REW sweep shown as a game ends (PLAN.md §8, M7). Hidden under Reduce effects. */
+export function RewindSweep() {
+  return (
+    <div className="rewind" aria-hidden="true">
+      <div className="rewind__band" />
+      <span className="rewind__label display">◀◀ REW</span>
+    </div>
   );
 }

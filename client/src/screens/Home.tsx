@@ -6,6 +6,7 @@ import { useIsPhone } from '../game/clock';
 import { useConnection } from '../net/useConnection';
 import { navigate } from '../router';
 import { usePublicStats } from '../game/usePublic';
+import { OptionsHost } from '../ui/options';
 
 const cleanCode = (raw: string): string =>
   raw
@@ -175,5 +176,10 @@ function HomePhone() {
 }
 
 export function Home() {
-  return useIsPhone() ? <HomePhone /> : <HomeTv />;
+  const isPhone = useIsPhone();
+  return (
+    <OptionsHost config={{ context: 'REPLAY' }} floatingGear={!isPhone}>
+      {isPhone ? <HomePhone /> : <HomeTv />}
+    </OptionsHost>
+  );
 }

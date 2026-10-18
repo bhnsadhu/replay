@@ -3,7 +3,7 @@ import { MIXES, PUBLIC_INTERMISSION_MS, PUBLIC_MIX_ORDER, type BoardEntry, type 
 import { usePublic, usePublicStats } from '../../game/usePublic';
 import { secondsUntil, useIsPhone, useNow } from '../../game/clock';
 import { connection } from '../../net/connection';
-import { Logo, Phone, PhoneTopRow, PlayerCard, StatusLine, TvHeader, TvStage } from '../../ui/frames';
+import { Logo, Phone, PhoneTopRow, PlayerCard, StatusLine, TvHeader, TvStage, RewindSweep } from '../../ui/frames';
 import { InitialsPicker } from '../../ui/controls';
 import { HiScoreBox, SegmentTimer, type ScoreRow } from '../../ui/game';
 import type { GameOver } from '../../game/useSoloGame';
@@ -16,6 +16,9 @@ import { hasSavedInitials, saveInitials, savedInitials } from '../room/PhoneScre
 import { boardRows, ordinal } from '../room/board';
 import { pad2, timerSegments } from '../format';
 import { ConnectionBanners } from '../../ui/banners';
+import { OptionsHost } from '../../ui/options';
+import { ShareButton } from '../../ui/share';
+import { navigate } from '../../router';
 
 const mixLabel = (id: MixId) => MIXES.find((m) => m.id === id)?.label ?? id;
 const nextMix = (view: PublicView) => PUBLIC_MIX_ORDER[(PUBLIC_MIX_ORDER.indexOf(view.mix) + (view.phase === 'intermission' ? 0 : 1)) % PUBLIC_MIX_ORDER.length]!;
@@ -30,9 +33,32 @@ function publicBoard(board: BoardEntry[], you: string): { rows: ScoreRow[]; foot
 
 export function PublicApp() {
   const api = usePublic();
+  const isPhone = useIsPhone();
+  const screen = <PublicScreen api={api} />;
+  const inRoom = api.state.status === 'in';
   return (
     <>
-      <PublicScreen api={api} />
+      {inRoom ? (
+        <OptionsHost
+          floatingGear={!isPhone}
+          config={{
+            context: 'PUBLIC',
+            initials: {
+              value: api.state.initials ?? savedInitials(),
+              lockedReason: null,
+              onSave: (initials) => {
+                saveInitials(initials);
+                api.setInitials(initials);
+              },
+            },
+            leave: { label: 'LEAVE PUBLIC', onLeave: () => navigate('/') },
+          }}
+        >
+          {screen}
+        </OptionsHost>
+      ) : (
+        screen
+      )}
       <ConnectionBanners inGame={api.state.status === 'in'} needsSoundTap={api.needsSoundTap} onTapSound={api.unlockAudio} />
     </>
   );
@@ -73,8 +99,8 @@ function PublicScreen({ api }: { api: ReturnType<typeof usePublic> }) {
 
   const lastBoard = reveal?.msg.board ?? over?.board ?? null;
   const mine = lastBoard?.find((b) => b.id === you);
-  // The server may rename duplicates (AAA → AA2); show its version once known.
-  const shownInitials = mine?.initials ?? initials;
+  // The server may rename duplicates (AAA → AA2); show its version.
+  const shownInitials = state.initials ?? initials;
   const rankLabel = mine ? `#${mine.rank} OF ${view.online}` : `${view.online} PLAYING`;
   const score = reveal?.msg.you?.score ?? 0;
   const secondsToSet = view.nextAt === null ? 0 : secondsUntil(connection.toLocal(view.nextAt), now, 99);
@@ -208,6 +234,7 @@ function PublicResultsPhone({ view, you, initials, over, secondsToSet }: { view:
   return (
     <Phone>
       <PhoneTopRow context={`PUBLIC · SET ${view.set}`} status="rew" />
+      <RewindSweep />
       <PlayerCard label={`${view.online} PLAYING`} initials={initials} rightLabel="SET SCORE" rightValue={String(stats?.score ?? 0)} />
       {stats && (
         <div className="over-hero">
@@ -226,6 +253,7 @@ function PublicResultsPhone({ view, you, initials, over, secondsToSet }: { view:
           </li>
         ))}
       </ol>
+      {stats && <ShareButton card={{ context: `PUBLIC · SET ${view.set} · ${mixLabel(view.mix)}`, initials, stats, players: view.online }} />}
       <StatusLine tone="time">
         NEXT SET IN {pad2(secondsToSet)} · {mixLabel(nextMix(view))}
       </StatusLine>
@@ -239,6 +267,7 @@ function PublicResultsDesktop({ view, you, over, secondsToSet }: { view: PublicV
   return (
     <TvStage>
       <TvHeader status="rew" context={`SET ${view.set}`} rightLabel="PLAYING" rightValue={String(view.online)} />
+      <RewindSweep />
       <div className="tv-body">
         <div className="tv-main">
           <h1 className="over-tv__title display">SET OVER</h1>

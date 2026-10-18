@@ -60,7 +60,7 @@ export function SoloRevealDesktop({ round, reveal, streakBefore, secondsToNext }
 
 export function RevealHero({ reveal }: { reveal: Reveal }) {
   return (
-    <div className="reveal-hero" data-letter={reveal.correct}>
+    <div className="reveal-hero glitch-in" data-letter={reveal.correct}>
       <span className="reveal-hero__letter display">{reveal.correct}</span>
       <div className="reveal-hero__text">
         <span className="reveal-hero__eyebrow">IT WAS</span>

@@ -3,6 +3,7 @@ import { useSoloGame } from '../../game/useSoloGame';
 import { Phone, PhoneTopRow, StatusLine } from '../../ui/frames';
 import { RoundPhone } from '../RoundPhone';
 import { pad2 } from '../format';
+import { OptionsHost } from '../../ui/options';
 import { SoloMenu } from './SoloMenu';
 import { SoloRoundDesktop } from './SoloRoundDesktop';
 import { SoloRevealDesktop, SoloRevealPhone } from './SoloReveal';
@@ -10,8 +11,20 @@ import { SoloOver } from './SoloOver';
 
 /** Single-player mode (M2). Phones get phone layouts; bigger screens get the TV layout. */
 export function SoloApp() {
-  const { state, start, pick, quit } = useSoloGame();
+  const game = useSoloGame();
   const isPhone = useIsPhone();
+  const inGame = game.state.phase === 'round' || game.state.phase === 'reveal';
+  const screen = <SoloScreen game={game} isPhone={isPhone} />;
+  if (!inGame) return screen;
+  return (
+    <OptionsHost config={{ context: 'SOLO', leave: { label: 'QUIT SOLO', onLeave: game.quit } }} floatingGear={!isPhone}>
+      {screen}
+    </OptionsHost>
+  );
+}
+
+function SoloScreen({ game, isPhone }: { game: ReturnType<typeof useSoloGame>; isPhone: boolean }) {
+  const { state, start, pick, quit } = game;
   const now = useNow(200);
 
   switch (state.phase) {

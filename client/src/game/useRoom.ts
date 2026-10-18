@@ -3,6 +3,8 @@ import { playsSound, type Letter, type RoomRole, type RoomRules, type RoomView, 
 import { connection } from '../net/connection';
 import { serverBaseUrl } from '../net/serverUrl';
 import { ClipPlayer } from '../audio/clipPlayer';
+import { announceServer } from '../ui/announce';
+import { playRevealSfx, playSfx } from '../audio/sfx';
 import { clearSeat, loadSeat, saveSeat } from '../net/seat';
 import type { GameOver, Reveal, RoundStart } from './useSoloGame';
 
@@ -20,6 +22,8 @@ export interface RoomState {
   closedReason: string | null;
   /** Trying to get this tab's seat back after a reload or dropped connection. */
   resuming: boolean;
+  /** The host skipped the last song; another one is loading. */
+  skipped: boolean;
 }
 
 type Action =
@@ -41,6 +45,7 @@ const INITIAL: RoomState = {
   error: null,
   closedReason: null,
   resuming: false,
+  skipped: false,
 };
 
 function reducer(state: RoomState, action: Action): RoomState {
@@ -59,7 +64,7 @@ function reducer(state: RoomState, action: Action): RoomState {
         case 'room:state': {
           const startingFresh = msg.room.phase !== 'playing' || state.room?.phase !== 'playing';
           const next = { ...state, status: 'in' as const, room: msg.room, role: msg.role, you: msg.you, error: null, resuming: false };
-          if (msg.room.phase === 'lobby') return { ...next, round: null, reveal: null, over: null, streak: 0 };
+          if (msg.room.phase === 'lobby') return { ...next, round: null, reveal: null, over: null, streak: 0, skipped: false };
           if (msg.room.phase === 'playing' && startingFresh) return { ...next, round: null, reveal: null, over: null, streak: 0 };
           return next;
         }
@@ -68,7 +73,11 @@ function reducer(state: RoomState, action: Action): RoomState {
             ...state,
             round: { msg, localStartAt: toLocal(msg.startAt), picked: null, lockedIn: { count: 0, total: state.room?.players.length ?? 0 } },
             reveal: null,
+            skipped: false,
           };
+        case 'roundSkipped':
+          if (!state.round || state.round.msg.roundId !== msg.roundId) return state;
+          return { ...state, round: null, reveal: null, skipped: true };
         case 'lockedIn':
           if (!state.round || state.round.msg.roundId !== msg.roundId) return state;
           return { ...state, round: { ...state.round, lockedIn: { count: msg.count, total: msg.total } } };
@@ -120,7 +129,16 @@ export function useRoom() {
           player().markStart(localStartAt);
         }
       }
-      if (msg.t === 'reveal' || msg.t === 'gameOver' || msg.t === 'room:closed') player().stop();
+      if (msg.t === 'reveal' || msg.t === 'gameOver' || msg.t === 'room:closed' || msg.t === 'roundSkipped') player().stop();
+      // Paused, or back in the lobby (END): the music stops. A resume sends the round again.
+      // (Only on that change: stopping mid-unlock would cancel the tap's sound permission.)
+      const wasRunning = room?.phase === 'playing' && !room.paused;
+      if (msg.t === 'room:state' && wasRunning && (msg.room.phase !== 'playing' || msg.room.paused)) player().stop();
+      // Effects follow the music (PLAN.md §2): only the device playing the clip plays them.
+      const loud = room !== null && role !== null && playsSound(role, room.rules.sound);
+      if (loud && msg.t === 'reveal') playRevealSfx(msg.you);
+      if (loud && msg.t === 'gameOver') playSfx('rewind');
+      announceServer(msg);
       dispatch({ type: 'server', msg, toLocal: (t) => connection.toLocal(t) });
     });
     // Seats survive reloads and dropped connections (PLAN.md §5): remember ours, and ask for it back
@@ -148,7 +166,8 @@ export function useRoom() {
       offSeat();
       offStatus();
       window.removeEventListener('pagehide', onPageHide);
-      playerRef.current?.stop();
+      playerRef.current?.dispose();
+      playerRef.current = null;
       // Navigating away inside the app (BACK TO HOME) is leaving on purpose. (Only when actually in a
       // room: React's dev-mode double mount runs this cleanup before anything happened.)
       if (latest.current.status === 'in') {
@@ -199,6 +218,8 @@ export function useRoom() {
         send({ t: 'room:start' });
       },
       end: () => send({ t: 'room:end' }),
+      pause: (paused: boolean) => send({ t: 'room:pause', paused }),
+      skip: () => send({ t: 'room:skip' }),
       vote: (replay: boolean) => send({ t: 'vote', replay }),
       kick: (playerId: string) => send({ t: 'room:kick', playerId }),
       leave: () => send({ t: 'room:leave' }),
@@ -206,6 +227,8 @@ export function useRoom() {
         const round = latest.current.round;
         if (!round || round.picked !== null) return;
         send({ t: 'guess', roundId: round.msg.roundId, choice: letter, elapsedMs: Math.round(player().elapsedMs()) });
+        const { room, role } = latest.current;
+        if (room && role && playsSound(role, room.rules.sound)) playSfx('lock');
         dispatch({ type: 'pick', letter });
       },
       clearError: () => dispatch({ type: 'clearError' }),

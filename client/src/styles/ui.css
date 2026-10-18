@@ -879,3 +879,89 @@ button.answer-tile { width: 100%; }
 /* Away players in lobbies */
 .slots__tag--away,
 .host-players__tag--away { color: var(--dim); }
+
+/* ---------- Options (M7) ---------- */
+.options-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  overflow-y: auto;
+  background: var(--bg);
+}
+.options { min-height: 100%; }
+.options__group { display: flex; flex-direction: column; gap: 12px; }
+.options__row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.options__small { min-height: 56px; font-size: 12px; line-height: 1.5; padding: 6px 10px; }
+.options__small:disabled { color: var(--dim); cursor: default; }
+.options__danger--armed { border-color: var(--white); color: var(--white); }
+.options__note { margin: 0; font-size: 22px; color: var(--dim); }
+.options__initials { margin: 0; text-align: center; font-size: 32px; letter-spacing: 6px; }
+.options-fab {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top));
+  right: max(8px, env(safe-area-inset-right));
+  z-index: 30;
+  background: var(--bg);
+  opacity: 0.6;
+}
+.options-fab:hover,
+.options-fab:focus-visible { opacity: 1; }
+
+/* ---------- Glitch reveal and rewind (M7) ---------- */
+/* The answer arrives like a bad tape: jumps, slices and a wide color split, then settles. */
+.glitch-in { animation: glitch-in 0.7s steps(1, end) both; }
+.glitch-in .reveal-hero__title,
+.glitch-in .track-card__title { animation: glitch-split 0.7s steps(1, end) backwards; }
+@keyframes glitch-in {
+  0% { opacity: 0; transform: translateX(-14px) skewX(14deg); clip-path: inset(40% 0 35% 0); }
+  10% { opacity: 1; transform: translateX(12px); clip-path: inset(0 0 70% 0); }
+  20% { transform: translateX(-8px); clip-path: inset(60% 0 0 0); }
+  30% { transform: translateX(5px) skewX(-8deg); clip-path: inset(20% 0 45% 0); }
+  42% { transform: none; clip-path: inset(0); }
+  55% { transform: translateX(-3px); }
+  65%, 100% { opacity: 1; transform: none; clip-path: inset(0); }
+}
+@keyframes glitch-split {
+  0%, 30% { text-shadow: -10px 0 var(--pink), 10px 0 var(--cyan); }
+  45% { text-shadow: 6px 0 var(--pink), -6px 0 var(--cyan); }
+  65% { text-shadow: -3px 0 var(--pink), 3px 0 var(--cyan); }
+}
+
+/* Game over rewinds the tape: a fast ◀◀ REW sweep over the results, then it clears. */
+.rewind {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.07) 0 2px, transparent 2px 9px),
+    var(--bg);
+  animation: rewind-out 1s steps(10, end) forwards;
+}
+.rewind__label {
+  font-size: clamp(28px, 7vw, 64px);
+  letter-spacing: 4px;
+  color: var(--white);
+  text-shadow: -4px 0 var(--pink), 4px 0 var(--cyan);
+}
+.rewind__band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 14%;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.22) 0 4px, transparent 4px 9px, rgba(255, 255, 255, 0.1) 9px 15px, transparent 15px 24px);
+  animation: rewind-band 0.25s linear infinite;
+}
+@keyframes rewind-out {
+  0%, 70% { opacity: 1; }
+  100% { opacity: 0; visibility: hidden; }
+}
+@keyframes rewind-band {
+  from { top: 100%; }
+  to { top: -14%; }
+}
+:root[data-effects='off'] .rewind { display: none; }
+@media (prefers-reduced-motion: reduce) { .rewind { display: none; } }
