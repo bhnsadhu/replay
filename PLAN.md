@@ -127,7 +127,7 @@ Not drawn yet, but specified by rules: the remote versions of reveal and game ov
 - The REPLAY? vote runs for 10 seconds. A majority starts a new game in the same room with the same rules. Otherwise everyone goes back to the lobby.
 
 **Public**
-- Runs nonstop in **sets of 10 rounds** (one "credit"). Your score resets each set. "Today's best" is the best set score of the day.
+- Runs nonstop in **sets of 10 rounds** (one "credit"). Your score resets each set. "Today's best" is the best set scores from the last 24 hours (kept in server memory, so a redeploy clears it). Mixes rotate set by set, with a 12 s results break between sets.
 - Top 10 plus your own row. Clean versions only (skip tracks with `explicit_lyrics`).
 - Rounds work the same as private rooms; nobody hosts.
 
@@ -261,7 +261,7 @@ Each milestone ends with something you can try. Don't start the next one until t
 Defaults (chosen; the owner can override any time):
 - **Mix playlists:** Claude picks public Deezer playlists for each mix in M2 and lists their IDs in `server/music/mixes.ts`.
 - **Initials blocklist:** a standard open-source profanity list, filtered down to 3-letter entries.
-- **"Today's best"** resets at midnight in the viewer's local time.
+- **"Today's best"** is a rolling 24 hours (the server can't know each viewer's midnight).
 - **Non-commercial project:** Deezer terms are reviewed again only if that changes.
 
 Open (needed from the owner later):

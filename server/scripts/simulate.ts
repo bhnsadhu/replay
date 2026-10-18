@@ -85,7 +85,7 @@ async function main(): Promise<void> {
     p.send({ t: 'room:join', code, initials: names[i]! });
     await p.next('room:state');
   }
-  const lobby = phones[0]!.last('room:state')!;
+  const lobby = await phones[0]!.got('room:state', (m) => m.room.players.length === 6);
   log('players:', lobby.room.players.map((p) => `P${p.slot}:${p.initials}`).join(' '));
   check(lobby.room.players.length === 6, '6 phones joined');
   check(lobby.room.hostId === lobby.you, 'first phone to join is the host');
