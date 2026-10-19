@@ -1,0 +1,18 @@
+# Render's free server sleeps after 15 minutes without traffic, and the first visitor then waits up
+# to a minute. Pinging /health every 10 minutes keeps it awake (~744 of Render's 750 free hours a
+# month, so this only fits while it's the account's one always-on free service).
+# GitHub may delay scheduled runs and pauses them after 60 days without commits to the repo.
+name: Keep server awake
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping /health
+        run: curl -fsS --retry 3 --retry-delay 20 --max-time 90 https://replay-api.bhanusadhu.com/health
