@@ -14,12 +14,14 @@ export interface RoundPhoneProps {
   clipSeconds: number;
   onPick: (letter: Letter) => void;
   onOptions?: () => void;
+  /** The clip hasn't started yet: answers are locked for a moment. */
+  waiting?: boolean;
   /** Extra content under the answers, e.g. the public top-3 strip. */
   footer?: ReactNode;
 }
 
 export function RoundPhone(props: RoundPhoneProps) {
-  const { context, player, options, picked, secondsLeft, clipSeconds, onPick, onOptions, footer } = props;
+  const { context, player, options, picked, secondsLeft, clipSeconds, onPick, onOptions, waiting = false, footer } = props;
 
   const stateFor = (letter: Letter): AnswerState => {
     if (picked === null) return 'idle';
@@ -39,11 +41,11 @@ export function RoundPhone(props: RoundPhoneProps) {
       <SegmentTimer size="phone" lit={timerSegments(secondsLeft, clipSeconds)} />
       <div className="answer-list">
         {options.map((option) => (
-          <AnswerButton key={option.letter} option={option} state={stateFor(option.letter)} onPick={picked ? undefined : onPick} />
+          <AnswerButton key={option.letter} option={option} state={stateFor(option.letter)} onPick={picked || waiting ? undefined : onPick} />
         ))}
       </div>
       {footer}
-      <StatusLine tone={picked ? 'good' : 'dim'}>{picked ? `LOCKED IN: ${picked}` : 'PRESS A BUTTON'}</StatusLine>
+      <StatusLine tone={picked ? 'good' : waiting ? 'time' : 'dim'}>{picked ? `LOCKED IN: ${picked}` : waiting ? 'GET READY…' : 'PRESS A BUTTON'}</StatusLine>
     </Phone>
   );
 }

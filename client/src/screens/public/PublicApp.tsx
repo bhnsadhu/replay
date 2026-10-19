@@ -130,6 +130,7 @@ function PublicScreen({ api }: { api: ReturnType<typeof usePublic> }) {
       return (
         <RoundPhone
           context={`PUBLIC · RND ${pad2(round.msg.index)}`}
+          waiting={now < round.localStartAt}
           player={{ label: rankLabel, initials: shownInitials, score, streak: state.streak }}
           options={round.msg.options}
           picked={round.picked}

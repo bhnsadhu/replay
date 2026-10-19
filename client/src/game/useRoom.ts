@@ -228,7 +228,8 @@ export function useRoom() {
       leave: () => send({ t: 'room:leave' }),
       pick: (letter: Letter) => {
         const round = latest.current.round;
-        if (!round || round.picked !== null) return;
+        // Answers count once the music starts, not during the get-ready moment before it.
+        if (!round || round.picked !== null || Date.now() < round.localStartAt) return;
         send({ t: 'guess', roundId: round.msg.roundId, choice: letter, elapsedMs: Math.round(player().elapsedMs()) });
         const { room, role } = latest.current;
         if (room && role && playsSound(role, room.rules.sound)) playSfx('lock');

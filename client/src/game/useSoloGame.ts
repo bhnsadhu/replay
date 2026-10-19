@@ -109,7 +109,8 @@ export function useSoloGame() {
 
   const pick = useCallback(
     (letter: Letter) => {
-      if (state.phase !== 'round' || state.picked !== null) return;
+      // Answers count once the music starts, not during the get-ready moment before it.
+      if (state.phase !== 'round' || state.picked !== null || Date.now() < state.localStartAt) return;
       connection.send({ t: 'guess', roundId: state.round.roundId, choice: letter, elapsedMs: Math.round(player().elapsedMs()) });
       playSfx('lock');
       dispatch({ type: 'pick', letter });

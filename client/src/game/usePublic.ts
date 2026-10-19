@@ -136,7 +136,8 @@ export function usePublic() {
       setInitials: (initials: string) => connection.send({ t: 'public:initials', initials }),
       pick: (letter: Letter) => {
         const round = latest.current.round;
-        if (!round || round.picked !== null) return;
+        // Answers count once the music starts, not during the get-ready moment before it.
+        if (!round || round.picked !== null || Date.now() < round.localStartAt) return;
         connection.send({ t: 'guess', roundId: round.msg.roundId, choice: letter, elapsedMs: Math.round(player().elapsedMs()) });
         playSfx('lock');
         dispatch({ type: 'pick', letter });

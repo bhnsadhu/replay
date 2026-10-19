@@ -249,6 +249,7 @@ function PhoneRoomScreen({ api, now, mode, code }: { api: RoomApi; now: number; 
     return (
       <RoundPhone
         context={`${room.code} · RND ${pad2(round.msg.index)}`}
+        waiting={now < round.localStartAt}
         player={{ label, initials, score, streak: state.streak }}
         options={round.msg.options}
         picked={round.picked}

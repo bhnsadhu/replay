@@ -43,6 +43,7 @@ function SoloScreen({ game, isPhone }: { game: ReturnType<typeof useSoloGame>; i
         return (
           <RoundPhone
             context={`SOLO · RND ${pad2(state.round.index)}`}
+            waiting={now < state.localStartAt}
             player={{ label: 'SOLO', initials: 'YOU', score: state.score, streak: state.streak }}
             options={state.round.options}
             picked={state.picked}
