@@ -33,13 +33,14 @@ const NOTES: Record<Sfx, Note[]> = {
     { freq: 988, at: 0, dur: 0.07 },
     { freq: 1319, at: 0.07, dur: 0.22 },
   ],
-  lock: [{ freq: 880, at: 0, dur: 0.06 }],
+  // Plays over the music, so it stays softer.
+  lock: [{ freq: 880, at: 0, dur: 0.06, gain: 0.6 }],
   correct: [523, 659, 784, 1047].map((freq, i) => ({ freq, at: i * 0.07, dur: i === 3 ? 0.24 : 0.07 })),
   wrong: [
-    { freq: 220, at: 0, dur: 0.14, wave: 'sawtooth', gain: 0.6 },
-    { freq: 165, at: 0.15, dur: 0.3, wave: 'sawtooth', gain: 0.6 },
+    { freq: 220, at: 0, dur: 0.14, wave: 'sawtooth', gain: 1.5 },
+    { freq: 165, at: 0.15, dur: 0.3, wave: 'sawtooth', gain: 1.5 },
   ],
-  rewind: [{ freq: 1400, to: 160, at: 0, dur: 0.6, wave: 'sawtooth', gain: 0.35 }],
+  rewind: [{ freq: 1400, to: 160, at: 0, dur: 0.6, wave: 'sawtooth', gain: 1.5 }],
 };
 
 export function playSfx(name: Sfx): void {
@@ -51,9 +52,14 @@ export function playSfx(name: Sfx): void {
     osc.type = note.wave ?? 'square';
     osc.frequency.setValueAtTime(note.freq, now + note.at);
     if (note.to) osc.frequency.exponentialRampToValueAtTime(note.to, now + note.at + note.dur);
-    const peak = 0.07 * (note.gain ?? 1);
-    amp.gain.setValueAtTime(peak, now + note.at);
-    amp.gain.exponentialRampToValueAtTime(0.0001, now + note.at + note.dur);
+    // Measured against Deezer previews (median around -10 dBFS): this puts effects about 6-8 dB
+    // under the music. Each note holds, then fades over its last 40%, with a 5 ms attack (no click).
+    const peak = 0.2 * (note.gain ?? 1);
+    const start = now + note.at;
+    amp.gain.setValueAtTime(0, start);
+    amp.gain.linearRampToValueAtTime(peak, start + 0.005);
+    amp.gain.setValueAtTime(peak, start + note.dur * 0.6);
+    amp.gain.exponentialRampToValueAtTime(0.0001, start + note.dur);
     osc.connect(amp).connect(ctx.destination);
     osc.start(now + note.at);
     osc.stop(now + note.at + note.dur + 0.02);
