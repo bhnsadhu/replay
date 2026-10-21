@@ -37,6 +37,12 @@ export async function chartTracks(): Promise<DeezerTrack[]> {
   return body.data;
 }
 
+/** Free-text or advanced search, e.g. `artist:"Toto" track:"Africa"`. */
+export async function searchTracks(query: string): Promise<DeezerTrack[]> {
+  const body = await getJson<{ data: DeezerTrack[] }>(`/search?q=${encodeURIComponent(query)}&limit=10`);
+  return body.data;
+}
+
 /** Fetches a track fresh. Preview links expire after ~15 minutes, so call this right before each round. */
 export function trackDetail(trackId: number): Promise<DeezerTrackDetail> {
   return getJson<DeezerTrackDetail>(`/track/${trackId}`);

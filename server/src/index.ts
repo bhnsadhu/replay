@@ -7,6 +7,7 @@ import { serveClip } from './audio';
 import { SoloGame } from './solo';
 import { handleRoomMessage, type Session } from './rooms';
 import { publicRoom } from './public';
+import { warmMixes } from './music/mixes';
 import { LIMITS, TokenBucket, audioLimiter, clientIp, closeConnection, connectLimiter, openConnection, tryLimiter } from './limits';
 
 const httpServer = createServer((req, res) => {
@@ -192,4 +193,5 @@ wss.on('connection', (ws, req: IncomingMessage) => {
 
 httpServer.listen(config.port, () => {
   console.log(`[replay] server listening on :${config.port} (${config.isProduction ? 'production' : 'development'})`);
+  warmMixes();
 });

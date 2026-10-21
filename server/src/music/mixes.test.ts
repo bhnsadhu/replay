@@ -1,0 +1,95 @@
+import { describe, expect, it } from 'vitest';
+import { inEra } from './mixes';
+import { baseTitle, primaryArtist, songKey } from './names';
+import { pickMatch, recentSongs } from './today';
+import type { DeezerTrack } from './deezer';
+
+describe('names', () => {
+  it('strips featured artists and edit labels from titles', () => {
+    expect(baseTitle("Hips Don't Lie (feat. Wyclef Jean)")).toBe("Hips Don't Lie");
+    expect(baseTitle('Streets of Philadelphia (Single Edit)')).toBe('Streets of Philadelphia');
+    expect(baseTitle('Africa - 2017 Remaster')).toBe('Africa');
+    expect(baseTitle('(I Just) Died In Your Arms')).toBe('Died In Your Arms');
+    expect(baseTitle('Fastlove, Pt. 1')).toBe('Fastlove');
+    expect(baseTitle('The Look Of Love, Pt.1')).toBe('The Look Of Love');
+  });
+
+  it('keeps the lead artist of a shared credit', () => {
+    expect(primaryArtist('Zach Bryan & Lana Del Rey')).toBe('Zach Bryan');
+    expect(primaryArtist('KAROL G, Judeline & rusowsky')).toBe('KAROL G');
+    expect(primaryArtist('Drake feat. Future')).toBe('Drake');
+    expect(primaryArtist('Olivia Rodrigo')).toBe('Olivia Rodrigo');
+  });
+
+  it('matches spellings with accents and punctuation', () => {
+    expect(songKey('JAŸ-Z', 'Empire State Of Mind')).toBe(songKey('JAY-Z', 'Empire State of Mind'));
+  });
+});
+
+describe('inEra', () => {
+  const years: Record<string, number | null> = {
+    [songKey('Toto', 'Africa')]: 1982,
+    [songKey('Freddie Mercury', 'Living On My Own')]: 1985,
+    [songKey('Unknown', 'Song')]: null,
+  };
+  const yearOf = (key: string) => years[key];
+  const nineties: [number, number] = [1990, 1999];
+
+  it('drops songs released outside the decade', () => {
+    expect(inEra({ id: 1, artist: 'Freddie Mercury', title: 'Living On My Own' }, nineties, yearOf)).toBe(false);
+    expect(inEra({ id: 2, artist: 'Toto', title: 'Africa' }, [1980, 1989], yearOf)).toBe(true);
+  });
+
+  it('keeps songs with no known year', () => {
+    expect(inEra({ id: 3, artist: 'Unknown', title: 'Song' }, nineties, yearOf)).toBe(true);
+    expect(inEra({ id: 4, artist: 'New', title: 'Addition' }, nineties, yearOf)).toBe(true);
+  });
+});
+
+describe('recentSongs', () => {
+  const now = Date.parse('2026-10-21');
+
+  it('keeps songs from the last two years, once each', () => {
+    const songs = recentSongs(
+      [
+        { artist: 'Tate McRae', title: 'Housewife', releaseDate: '2026-10-15' },
+        { artist: 'Drake', title: 'Best I Ever Had', releaseDate: '2009-02-13' },
+        { artist: 'Tate McRae', title: 'Housewife', releaseDate: '2026-10-15' },
+        { artist: 'Zach Bryan & Lana Del Rey', title: 'Lies (feat. Lana Del Rey)', releaseDate: '2025-06-01' },
+      ],
+      now,
+    );
+    expect(songs.map((s) => s.title)).toEqual(['Housewife', 'Lies (feat. Lana Del Rey)']);
+  });
+
+  it('keeps at most 3 songs per lead artist', () => {
+    const songs = recentSongs(
+      ['A', 'B', 'C', 'D'].map((title) => ({ artist: 'Morgan Wallen', title, releaseDate: '2026-01-01' })),
+      now,
+    );
+    expect(songs.map((s) => s.title)).toEqual(['A', 'B', 'C']);
+  });
+});
+
+describe('pickMatch', () => {
+  const track = (over: Partial<DeezerTrack>): DeezerTrack => ({
+    id: 1,
+    title_short: 'Lies',
+    preview: 'https://cdn/preview.mp3',
+    explicit_lyrics: false,
+    artist: { name: 'Zach Bryan' },
+    ...over,
+  });
+  const song = { artist: 'Zach Bryan & Lana Del Rey', title: 'Lies (feat. Lana Del Rey)', releaseDate: '2025-06-01' };
+
+  it('prefers a clean version of the same song', () => {
+    const picked = pickMatch(song, [track({ id: 1, explicit_lyrics: true }), track({ id: 2 })]);
+    expect(picked?.id).toBe(2);
+  });
+
+  it('rejects other artists, other titles and unplayable tracks', () => {
+    expect(pickMatch(song, [track({ artist: { name: 'Zach Top' } })])).toBeNull();
+    expect(pickMatch(song, [track({ title_short: 'Lies Lies Lies' })])).toBeNull();
+    expect(pickMatch(song, [track({ preview: '' })])).toBeNull();
+  });
+});

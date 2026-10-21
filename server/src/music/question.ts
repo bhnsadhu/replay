@@ -1,5 +1,6 @@
 import { LETTERS, type AnswerOption, type Letter } from '@replay/shared';
 import type { DeezerTrack } from './deezer';
+import { norm } from './names';
 
 export interface PoolTrack {
   id: number;
@@ -12,8 +13,6 @@ export interface Question {
   correct: Letter;
   options: AnswerOption[];
 }
-
-const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
 /** Keeps playable, clean tracks and drops duplicates (same id, or same title by the same artist). */
 export function toPool(tracks: DeezerTrack[]): PoolTrack[] {
