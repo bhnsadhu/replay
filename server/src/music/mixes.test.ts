@@ -36,13 +36,13 @@ describe('inEra', () => {
   const nineties: [number, number] = [1990, 1999];
 
   it('drops songs released outside the decade', () => {
-    expect(inEra({ id: 1, artist: 'Freddie Mercury', title: 'Living On My Own' }, nineties, yearOf)).toBe(false);
-    expect(inEra({ id: 2, artist: 'Toto', title: 'Africa' }, [1980, 1989], yearOf)).toBe(true);
+    expect(inEra({ artist: 'Freddie Mercury', title: 'Living On My Own' }, nineties, yearOf)).toBe(false);
+    expect(inEra({ artist: 'Toto', title: 'Africa' }, [1980, 1989], yearOf)).toBe(true);
   });
 
   it('keeps songs with no known year', () => {
-    expect(inEra({ id: 3, artist: 'Unknown', title: 'Song' }, nineties, yearOf)).toBe(true);
-    expect(inEra({ id: 4, artist: 'New', title: 'Addition' }, nineties, yearOf)).toBe(true);
+    expect(inEra({ artist: 'Unknown', title: 'Song' }, nineties, yearOf)).toBe(true);
+    expect(inEra({ artist: 'New', title: 'Addition' }, nineties, yearOf)).toBe(true);
   });
 });
 
@@ -77,7 +77,7 @@ describe('pickMatch', () => {
     title_short: 'Lies',
     preview: 'https://cdn/preview.mp3',
     explicit_lyrics: false,
-    artist: { name: 'Zach Bryan' },
+    artist: { id: 10, name: 'Zach Bryan' },
     ...over,
   });
   const song = { artist: 'Zach Bryan & Lana Del Rey', title: 'Lies (feat. Lana Del Rey)', releaseDate: '2025-06-01' };
@@ -88,7 +88,7 @@ describe('pickMatch', () => {
   });
 
   it('rejects other artists, other titles and unplayable tracks', () => {
-    expect(pickMatch(song, [track({ artist: { name: 'Zach Top' } })])).toBeNull();
+    expect(pickMatch(song, [track({ artist: { id: 11, name: 'Zach Top' } })])).toBeNull();
     expect(pickMatch(song, [track({ title_short: 'Lies Lies Lies' })])).toBeNull();
     expect(pickMatch(song, [track({ preview: '' })])).toBeNull();
   });

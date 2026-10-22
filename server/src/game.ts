@@ -18,6 +18,7 @@ import { newClipId, storeClip } from './audio';
 import { downloadPreview, trackDetail } from './music/deezer';
 import { loadMix } from './music/mixes';
 import { buildQuestion, type PoolTrack, type Question } from './music/question';
+import { areRelated } from './music/related';
 
 export interface GameSettings {
   mix: MixId;
@@ -205,7 +206,7 @@ export class Game {
 
   private async prepare(): Promise<PreparedRound | null> {
     for (let attempt = 0; attempt < MAX_PREPARE_ATTEMPTS; attempt++) {
-      const question = buildQuestion(this.pool, this.used);
+      const question = buildQuestion(this.pool, this.used, Math.random, areRelated);
       if (!question) return null;
       this.used.add(question.answer.id);
       try {

@@ -1,6 +1,7 @@
 import { MIXES, type MixId } from '@replay/shared';
 import { playlistTracks, type DeezerTrack } from './deezer';
-import { toPool, type PoolTrack } from './question';
+import { toPool, type PoolTrack, type SourceTrack } from './question';
+import { warmRelated } from './related';
 import { todayTracks } from './today';
 import { songKey } from './names';
 import years from './years.json' with { type: 'json' };
@@ -17,7 +18,7 @@ export const DECADES: Record<'80s' | '90s' | '2000s', { playlists: number[]; era
 /** Original release years from MusicBrainz, written by `npm run years -w server`. Null = not found. */
 const YEARS: Record<string, number | null> = years;
 
-const SOURCES: Record<MixId, { load: () => Promise<DeezerTrack[]>; era?: Era }> = {
+const SOURCES: Record<MixId, { load: () => Promise<SourceTrack[]>; era?: Era }> = {
   throwbacks: { load: () => fromPlaylists(Object.values(DECADES).flatMap((d) => d.playlists)), era: [1980, 2009] },
   '80s': { load: () => fromPlaylists(DECADES['80s'].playlists), era: DECADES['80s'].era },
   '90s': { load: () => fromPlaylists(DECADES['90s'].playlists), era: DECADES['90s'].era },
@@ -31,7 +32,7 @@ async function fromPlaylists(ids: number[]): Promise<DeezerTrack[]> {
 }
 
 /** Editors slip in songs from other decades; drop any whose original release year is known to be outside the era. */
-export function inEra(track: PoolTrack, [from, to]: Era, yearOf: (key: string) => number | null | undefined): boolean {
+export function inEra(track: Pick<PoolTrack, 'artist' | 'title'>, [from, to]: Era, yearOf: (key: string) => number | null | undefined): boolean {
   const year = yearOf(songKey(track.artist, track.title));
   return year == null || (year >= from && year <= to);
 }
@@ -46,8 +47,11 @@ function refresh(mix: MixId): Promise<PoolTrack[]> {
   const { load, era } = SOURCES[mix];
   const job = load()
     .then((tracks) => {
-      const pool = toPool(tracks).filter((t) => !era || inEra(t, era, (key) => YEARS[key]));
+      const pool = toPool(tracks)
+        .map((t) => ({ ...t, year: t.year ?? YEARS[songKey(t.artist, t.title)] ?? null }))
+        .filter((t) => !era || inEra(t, era, (key) => YEARS[key]));
       cache.set(mix, { pool, loadedAt: Date.now() });
+      warmRelated(pool.map((t) => t.artistId));
       return pool;
     })
     .finally(() => loading.delete(mix));

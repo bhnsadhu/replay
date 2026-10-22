@@ -2,6 +2,14 @@
 
 const API = 'https://api.deezer.com';
 const TIMEOUT_MS = 8000;
+/**
+ * Deezer allows ~50 requests per 5 seconds per IP. Background lookups start at most one per this gap, so a game's own
+ * requests always have headroom.
+ */
+const BACKGROUND_GAP_MS = 170;
+
+/** 'background' runs paced; 'idle' runs paced too, but only when no 'background' request is waiting. */
+type Lane = 'background' | 'idle';
 
 export interface DeezerTrack {
   id: number;
@@ -10,14 +18,38 @@ export interface DeezerTrack {
   /** Present on playlist tracks, missing on chart tracks. */
   readable?: boolean;
   explicit_lyrics: boolean;
-  artist: { name: string };
+  artist: { id: number; name: string };
 }
 
 export interface DeezerTrackDetail extends DeezerTrack {
   release_date?: string;
 }
 
-async function getJson<T>(path: string): Promise<T> {
+const waiting: Record<Lane, (() => void)[]> = { background: [], idle: [] };
+let pacing = false;
+
+/** Lets the next waiting request go, then holds the lane for one gap. */
+function pump(): void {
+  if (pacing) return;
+  const go = waiting.background.shift() ?? waiting.idle.shift();
+  if (!go) return;
+  pacing = true;
+  go();
+  setTimeout(() => {
+    pacing = false;
+    pump();
+  }, BACKGROUND_GAP_MS);
+}
+
+function slot(lane: Lane): Promise<void> {
+  return new Promise((resolve) => {
+    waiting[lane].push(resolve);
+    pump();
+  });
+}
+
+async function getJson<T>(path: string, lane?: Lane): Promise<T> {
+  if (lane) await slot(lane);
   const res = await fetch(`${API}${path}`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
   if (!res.ok) throw new Error(`Deezer ${path} failed: HTTP ${res.status}`);
   const body = (await res.json()) as T & { error?: { message?: string } };
@@ -37,9 +69,15 @@ export async function chartTracks(): Promise<DeezerTrack[]> {
   return body.data;
 }
 
-/** Free-text or advanced search, e.g. `artist:"Toto" track:"Africa"`. */
+/** Free-text or advanced search, e.g. `artist:"Toto" track:"Africa"`. Paced in the background lane. */
 export async function searchTracks(query: string): Promise<DeezerTrack[]> {
-  const body = await getJson<{ data: DeezerTrack[] }>(`/search?q=${encodeURIComponent(query)}&limit=10`);
+  const body = await getJson<{ data: DeezerTrack[] }>(`/search?q=${encodeURIComponent(query)}&limit=10`, 'background');
+  return body.data;
+}
+
+/** Artists Deezer considers similar, most similar first. Waits in the idle lane: nice to have, never urgent. */
+export async function relatedArtists(artistId: number): Promise<{ id: number; name: string }[]> {
+  const body = await getJson<{ data: { id: number; name: string }[] }>(`/artist/${artistId}/related?limit=50`, 'idle');
   return body.data;
 }
 
