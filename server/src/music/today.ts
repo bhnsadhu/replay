@@ -44,18 +44,19 @@ export function recentSongs(songs: ChartSong[], now: number): ChartSong[] {
   });
 }
 
-/** The Deezer result that is this song: same lead artist and title, playable, a clean version if there is one. */
+/** The Deezer result that is this song: same lead artist and title, playable. Deezer ranks the original version first. */
 export function pickMatch(song: ChartSong, results: DeezerTrack[]): DeezerTrack | null {
   const artist = norm(primaryArtist(song.artist));
   const title = norm(baseTitle(song.title));
-  const matches = results.filter(
-    (t) =>
-      t.preview &&
-      t.readable !== false &&
-      norm(primaryArtist(t.artist.name)) === artist &&
-      norm(baseTitle(t.title_short)) === title,
+  return (
+    results.find(
+      (t) =>
+        t.preview &&
+        t.readable !== false &&
+        norm(primaryArtist(t.artist.name)) === artist &&
+        norm(baseTitle(t.title_short)) === title,
+    ) ?? null
   );
-  return matches.find((t) => !t.explicit_lyrics) ?? matches[0] ?? null;
 }
 
 async function findOnDeezer(song: ChartSong): Promise<DeezerTrack | null> {

@@ -197,7 +197,7 @@ function PublicJoin(props: { initials: string; onInitials: (v: string) => void; 
       <button type="button" className="primary-button display" disabled={props.pending} onClick={props.onJoin}>
         {props.pending ? 'JOINING…' : 'PRESS START'}
       </button>
-      <StatusLine>NONSTOP SETS · CLEAN SONGS</StatusLine>
+      <StatusLine>NONSTOP SETS · ROTATING MIXES</StatusLine>
     </Phone>
   );
 }
@@ -213,7 +213,7 @@ function PublicWaiting({ view, seconds, isPhone, title }: { view: PublicView; se
           <p>{sub}</p>
           <p className="sound-note">♪ Turn your volume up. The music plays on this phone.</p>
         </div>
-        <StatusLine>NONSTOP SETS · CLEAN SONGS</StatusLine>
+        <StatusLine>NONSTOP SETS · ROTATING MIXES</StatusLine>
       </Phone>
     );
   }

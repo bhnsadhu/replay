@@ -82,8 +82,8 @@ describe('pickMatch', () => {
   });
   const song = { artist: 'Zach Bryan & Lana Del Rey', title: 'Lies (feat. Lana Del Rey)', releaseDate: '2025-06-01' };
 
-  it('prefers a clean version of the same song', () => {
-    const picked = pickMatch(song, [track({ id: 1, explicit_lyrics: true }), track({ id: 2 })]);
+  it('takes the first playable version of the same song', () => {
+    const picked = pickMatch(song, [track({ id: 1, preview: '' }), track({ id: 2, explicit_lyrics: true }), track({ id: 3 })]);
     expect(picked?.id).toBe(2);
   });
 

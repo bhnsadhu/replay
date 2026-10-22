@@ -55,7 +55,7 @@ function refresh(mix: MixId): Promise<PoolTrack[]> {
   return job;
 }
 
-/** Playable, clean tracks for a mix. Refreshed hourly in the background; the last good pool is served meanwhile. */
+/** Playable tracks for a mix. Refreshed hourly in the background; the last good pool is served meanwhile. */
 export async function loadMix(mix: MixId): Promise<PoolTrack[]> {
   const hit = cache.get(mix);
   if (!hit) return refresh(mix);

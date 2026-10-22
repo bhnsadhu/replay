@@ -14,13 +14,13 @@ export interface Question {
   options: AnswerOption[];
 }
 
-/** Keeps playable, clean tracks and drops duplicates (same id, or same title by the same artist). */
+/** Keeps playable tracks and drops duplicates (same id, or same title by the same artist). */
 export function toPool(tracks: DeezerTrack[]): PoolTrack[] {
   const seen = new Set<string>();
   const pool: PoolTrack[] = [];
   for (const t of tracks) {
     // Chart tracks don't include `readable`, so only skip tracks explicitly marked unreadable.
-    if (!t.preview || t.readable === false || t.explicit_lyrics) continue;
+    if (!t.preview || t.readable === false) continue;
     const key = `${norm(t.artist.name)}|${norm(t.title_short)}`;
     if (seen.has(key) || seen.has(`id:${t.id}`)) continue;
     seen.add(key);

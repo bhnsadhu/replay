@@ -74,7 +74,7 @@ describe('toPool', () => {
     ...extra,
   });
 
-  it('drops tracks without a preview, unreadable or explicit tracks, and duplicates', () => {
+  it('drops tracks without a preview, unreadable tracks and duplicates, and keeps explicit ones', () => {
     const result = toPool([
       track(1),
       track(2, { preview: '' }),
@@ -84,7 +84,7 @@ describe('toPool', () => {
       track(6, { title_short: 'Song 5', artist: { name: 'artist 5' } }),
       track(1),
     ]);
-    expect(result.map((t) => t.id)).toEqual([1, 5]);
+    expect(result.map((t) => t.id)).toEqual([1, 4, 5]);
   });
 
   it('keeps chart tracks, which have no readable field', () => {

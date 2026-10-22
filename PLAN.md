@@ -129,7 +129,7 @@ Not drawn yet, but specified by rules: the remote versions of reveal and game ov
 
 **Public**
 - Runs nonstop in **sets of 10 rounds** (one "credit"). Your score resets each set. "Today's best" is the best set scores from the last 24 hours (kept in server memory, so a redeploy clears it). Mixes rotate set by set, with a 12 s results break between sets.
-- Top 10 plus your own row. Clean versions only (skip tracks with `explicit_lyrics`).
+- Top 10 plus your own row. Explicit tracks are allowed (the clean-only filter was turned off 2026-10-21).
 - Rounds work the same as private rooms; nobody hosts.
 
 ---
