@@ -217,6 +217,7 @@ export function HostPhone({ room, you, error, onRules, onKick, onStart }: HostPr
         <Stepper
           label="MIX"
           value={MIXES.find((m) => m.id === rules.mix)?.label ?? rules.mix}
+          hint={MIXES.find((m) => m.id === rules.mix)?.blurb}
           onPrev={() => set({ mix: cycle(mixIds, rules.mix, -1) })}
           onNext={() => set({ mix: cycle(mixIds, rules.mix, 1) })}
         />

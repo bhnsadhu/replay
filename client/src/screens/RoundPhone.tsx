@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { AnswerOption, Letter } from '@replay/shared';
 import { Phone, PhoneTopRow, PlayerCard, StatusLine } from '../ui/frames';
 import { AnswerButton, SegmentTimer, type AnswerState } from '../ui/game';
-import { timerSegments } from './format';
+import { isUrgent, timerSegments } from './format';
 
 export interface RoundPhoneProps {
   /** Top-left context, e.g. "WXQK · RND 04" or "SOLO · RND 04". */
@@ -38,8 +38,8 @@ export function RoundPhone(props: RoundPhoneProps) {
         rightLabelTone={player.streak > 0 ? 'streak' : 'dim'}
         rightValue={String(player.score)}
       />
-      <SegmentTimer size="phone" lit={timerSegments(secondsLeft, clipSeconds)} />
-      <div className="answer-list">
+      <SegmentTimer size="phone" lit={timerSegments(secondsLeft, clipSeconds)} urgent={!picked && isUrgent(secondsLeft)} />
+      <div className="answer-list deal-in">
         {options.map((option) => (
           <AnswerButton key={option.letter} option={option} state={stateFor(option.letter)} onPick={picked || waiting ? undefined : onPick} />
         ))}

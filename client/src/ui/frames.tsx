@@ -48,14 +48,17 @@ export function TvHeader({ status, context, rightLabel, rightValue }: TvHeaderPr
     <header className="tv-header">
       <div className="tv-header__side">
         <span className="tv-header__status">
-          {vhsGlyph(status)} {vhsWord(status)} &nbsp;SP
+          {vhsGlyph(status)} {vhsWord(status)}
         </span>
         <span>{context}</span>
       </div>
       <Logo />
       <div className="tv-header__side tv-header__side--right">
         <span>{rightLabel}</span>
-        <span className="tv-header__code display">{rightValue}</span>
+        {/* Keyed by value so a new score bumps. */}
+        <span key={rightValue} className="tv-header__code display">
+          {rightValue}
+        </span>
       </div>
     </header>
   );
@@ -128,8 +131,13 @@ export function PlayerCard({ label, initials, rightLabel, rightValue, rightLabel
         <span className="display player-card__value">{initials}</span>
       </div>
       <div className="player-card__col player-card__col--right">
-        <span className={`player-card__label player-card__label--${rightLabelTone}`}>{rightLabel}</span>
-        <span className="display player-card__value player-card__value--score num">{rightValue}</span>
+        {/* Keyed by text so a new streak or score bumps. */}
+        <span key={rightLabel} className={`player-card__label player-card__label--${rightLabelTone}`}>
+          {rightLabel}
+        </span>
+        <span key={rightValue} className="display player-card__value player-card__value--score num">
+          {rightValue}
+        </span>
       </div>
     </div>
   );

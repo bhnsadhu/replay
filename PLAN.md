@@ -94,7 +94,8 @@ Not drawn yet, but specified by rules: the remote versions of reveal and game ov
    - home: ▶ PLAY
    - setup / lobby: ■ STOP
    - round: ▶ PLAY
-   - reveal: ❚❚ PAUSE
+   - reveal: ▶▶ FF (was ❚❚ PAUSE until 2026-10-21; that read as paused while the NEXT timer ran, and clashed with the host's real pause)
+   - paused (host or TV dropped): ❚❚ PAUSE
    - game over: ◀◀ REW
 3. **TV frame:** padding 36/48. The header always shows the status label (left), the REPLAY logo (center) and the room code (right). Body: main column plus a 300px boxed side column. The footer is a status line or the segmented timer.
 4. **Phone frame:** padding 28/20. Top row: context on the left; the status label and the 44px options gear on the right. Then the player card: player number and initials on the left, streak and score on the right. The status line sits at the bottom.

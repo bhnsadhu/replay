@@ -14,11 +14,11 @@ export const MAX_CLAIMED_LAG_MS = 2000;
 export const VOTE_MS = 10_000;
 
 export const MIXES = [
-  { id: 'throwbacks', label: 'THROWBACKS' },
-  { id: '80s', label: '80s' },
-  { id: '90s', label: '90s' },
-  { id: '2000s', label: '2000s' },
-  { id: 'today', label: 'TODAY' },
+  { id: 'throwbacks', label: 'THROWBACKS', blurb: 'Hits from the 80s, 90s and 2000s' },
+  { id: '80s', label: '80s', blurb: 'Hits from 1980 to 1989' },
+  { id: '90s', label: '90s', blurb: 'Hits from 1990 to 1999' },
+  { id: '2000s', label: '2000s', blurb: 'Hits from 2000 to 2009' },
+  { id: 'today', label: 'TODAY', blurb: 'On the charts right now' },
 ] as const;
 
 export type MixId = (typeof MIXES)[number]['id'];

@@ -3,7 +3,7 @@ import { LETTERS, type Letter } from '@replay/shared';
 import { TvHeader, TvStage } from '../../ui/frames';
 import { AnswerTile, SegmentTimer, Waveform, waveformBars, type AnswerState } from '../../ui/game';
 import { StatBox } from '../../ui/result';
-import { pad2, timerSegments } from '../format';
+import { isUrgent, pad2, timerSegments } from '../format';
 import type { RoundStart } from '../../game/useSoloGame';
 
 const BARS = waveformBars(56);
@@ -44,12 +44,12 @@ export function SoloRoundDesktop({ round, picked, secondsLeft, progress, score, 
       <TvHeader status="play" context={`ROUND ${pad2(round.index)} / ${round.total}`} rightLabel={right?.label ?? 'SCORE'} rightValue={right?.value ?? String(score)} />
       <div className="tv-body">
         <div className="tv-main">
-          <Waveform bars={BARS} progress={progress} />
+          <Waveform bars={BARS} progress={progress} live />
           <div className="tv-question">
             <h1 className="display">WHAT'S THIS TRACK?</h1>
             <span className="tv-question__count">{picked ? `LOCKED IN: ${picked}` : 'CLICK OR PRESS 1-4'}</span>
           </div>
-          <div className="answer-grid">
+          <div className="answer-grid deal-in">
             {round.options.map((option, i) => (
               <AnswerTile
                 key={option.letter}
@@ -73,7 +73,7 @@ export function SoloRoundDesktop({ round, picked, secondsLeft, progress, score, 
         />
         )}
       </div>
-      <SegmentTimer size="tv" label="TIME" lit={timerSegments(secondsLeft, clipSeconds)} value={pad2(secondsLeft)} />
+      <SegmentTimer size="tv" label="TIME" lit={timerSegments(secondsLeft, clipSeconds)} value={pad2(secondsLeft)} urgent={!picked && isUrgent(secondsLeft)} />
     </TvStage>
   );
 }

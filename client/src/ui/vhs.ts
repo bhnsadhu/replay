@@ -1,10 +1,12 @@
 // VHS status labels, one per stage of the game (PLAN.md §4, rule 2).
-export type VhsStatus = 'play' | 'stop' | 'pause' | 'rew';
+// ❚❚ PAUSE only ever means the game is actually paused; reveals fast-forward to the next song.
+export type VhsStatus = 'play' | 'stop' | 'pause' | 'ff' | 'rew';
 
 const GLYPHS: Record<VhsStatus, string> = {
   play: '▶',
   stop: '■',
   pause: '❚❚',
+  ff: '▶▶',
   rew: '◀◀',
 };
 
@@ -12,6 +14,7 @@ const WORDS: Record<VhsStatus, string> = {
   play: 'PLAY',
   stop: 'STOP',
   pause: 'PAUSE',
+  ff: 'FF',
   rew: 'REW',
 };
 

@@ -35,11 +35,13 @@ export function InitialsPicker({ value, onChange }: { value: string; onChange: (
 interface StepperProps {
   label: string;
   value: string;
+  /** A short line under the value explaining it, e.g. what a mix holds. */
+  hint?: string;
   onPrev: () => void;
   onNext: () => void;
 }
 
-export function Stepper({ label, value, onPrev, onNext }: StepperProps) {
+export function Stepper({ label, value, hint, onPrev, onNext }: StepperProps) {
   return (
     <div className="stepper">
       <span className="stepper__label">{label}</span>
@@ -52,6 +54,7 @@ export function Stepper({ label, value, onPrev, onNext }: StepperProps) {
       <button type="button" className="stepper__arrow" aria-label={`${label} next`} onClick={onNext}>
         ▶
       </button>
+      {hint && <span className="stepper__hint">{hint}</span>}
     </div>
   );
 }
@@ -82,7 +85,7 @@ interface TrackCardProps {
   year?: number;
 }
 
-/** The revealed song, with links to save it. */
+/** The revealed song, with links to find it on a streaming service. */
 export function TrackCard({ letter, title, artist, year }: TrackCardProps) {
   const query = encodeURIComponent(`${title} ${artist}`);
   return (
@@ -100,10 +103,10 @@ export function TrackCard({ letter, title, artist, year }: TrackCardProps) {
       </div>
       <div className="track-card__links">
         <a href={`https://open.spotify.com/search/${query}`} target="_blank" rel="noreferrer">
-          + SPOTIFY
+          FIND ON SPOTIFY
         </a>
         <a href={`https://music.apple.com/search?term=${query}`} target="_blank" rel="noreferrer">
-          + APPLE MUSIC
+          FIND ON APPLE MUSIC
         </a>
       </div>
     </section>

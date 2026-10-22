@@ -159,7 +159,7 @@ export function RevealTv({ room, round, reveal, secondsToNext }: { room: RoomVie
 
   return (
     <TvStage>
-      <TvHeader status="pause" context={`ROUND ${pad2(round.index)} / ${round.total}`} rightLabel="ROOM CODE" rightValue={room.code} />
+      <TvHeader status="ff" context={`ROUND ${pad2(round.index)} / ${round.total}`} rightLabel="ROOM CODE" rightValue={room.code} />
       <div className="tv-body">
         <div className="tv-main">
           <RevealHero reveal={reveal} />

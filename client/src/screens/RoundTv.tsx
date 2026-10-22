@@ -1,7 +1,7 @@
 import type { AnswerOption } from '@replay/shared';
 import { TvHeader, TvStage } from '../ui/frames';
 import { AnswerTile, HiScoreBox, SegmentTimer, Waveform, waveformBars, type ScoreRow } from '../ui/game';
-import { pad2, timerSegments } from './format';
+import { isUrgent, pad2, timerSegments } from './format';
 
 export interface RoundTvProps {
   roomCode: string;
@@ -26,14 +26,14 @@ export function RoundTv(props: RoundTvProps) {
       <TvHeader status="play" context={`ROUND ${pad2(roundIndex)} / ${roundCount}`} rightLabel="ROOM CODE" rightValue={roomCode} />
       <div className="tv-body">
         <div className="tv-main">
-          <Waveform bars={BARS} progress={progress} />
+          <Waveform bars={BARS} progress={progress} live />
           <div className="tv-question">
             <h1 className="display">WHAT'S THIS TRACK?</h1>
             <span className="tv-question__count">
               {lockedIn} / {playerCount} LOCKED IN
             </span>
           </div>
-          <div className="answer-grid">
+          <div className="answer-grid deal-in">
             {options.map((option) => (
               <AnswerTile key={option.letter} option={option} state="idle" />
             ))}
@@ -41,7 +41,7 @@ export function RoundTv(props: RoundTvProps) {
         </div>
         <HiScoreBox title="HI-SCORE" rows={board} />
       </div>
-      <SegmentTimer size="tv" label="TIME" lit={timerSegments(secondsLeft, clipSeconds)} value={pad2(secondsLeft)} />
+      <SegmentTimer size="tv" label="TIME" lit={timerSegments(secondsLeft, clipSeconds)} value={pad2(secondsLeft)} urgent={isUrgent(secondsLeft)} />
     </TvStage>
   );
 }

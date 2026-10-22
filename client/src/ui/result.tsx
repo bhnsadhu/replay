@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useCountUp } from './motion';
 
 export type VerdictKind = 'correct' | 'wrong' | 'none';
 
@@ -10,11 +11,12 @@ const WORDS: Record<VerdictKind, string> = {
 
 /** Big result word plus the points gained this round. */
 export function Verdict({ kind, points }: { kind: VerdictKind; points: number }) {
+  const shown = useCountUp(points);
   return (
     <div className="verdict">
       <span className={`verdict__word verdict__word--${kind} display`}>{WORDS[kind]}</span>
       <span className={points > 0 ? 'verdict__points display num' : 'verdict__points verdict__points--zero display num'}>
-        +{points}
+        +{shown}
       </span>
     </div>
   );

@@ -28,14 +28,17 @@ export function SoloMenu({ loading, initialMix = 'throwbacks', onStart }: SoloMe
           <button
             key={m.id}
             type="button"
-            className={m.id === mix ? 'menu-item menu-item--on' : 'menu-item'}
+            className={m.id === mix ? 'menu-item menu-item--two menu-item--on' : 'menu-item menu-item--two'}
             aria-pressed={m.id === mix}
             onClick={() => setMix(m.id)}
           >
             <span className="menu-item__cursor display" aria-hidden="true">
               ▶
             </span>
-            <span className="display">{m.label}</span>
+            <span className="menu-item__text">
+              <span className="display">{m.label}</span>
+              <span className="menu-item__sub">{m.blurb}</span>
+            </span>
           </button>
         ))}
       </fieldset>

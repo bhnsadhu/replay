@@ -239,6 +239,12 @@ button.answer-tile { width: 100%; }
   box-shadow: none;
 }
 .answer-tile--dimmed .answer-tile__title { color: var(--dim); }
+.answer-tile--wrong {
+  --answer: var(--line);
+  box-shadow: none;
+}
+.answer-tile--wrong .answer-tile__title { color: var(--dim); text-decoration: line-through; }
+.answer-tile--wrong .answer-tile__tag { color: var(--dim); }
 .answer-tile--correct { border-width: 4px; box-shadow: 0 0 calc(var(--glow-strength) * 1.5) color-mix(in srgb, var(--answer) 45%, transparent); }
 
 /* ---------- Timer ---------- */
@@ -372,6 +378,7 @@ button.answer-tile { width: 100%; }
   font-size: 20px;
 }
 .stepper__value { text-align: center; font-size: 28px; }
+.stepper__hint { grid-column: 1 / -1; justify-self: end; font-size: 20px; color: var(--dim); }
 
 /* ---------- Toggle ---------- */
 .toggle {
@@ -965,3 +972,103 @@ button.answer-tile { width: 100%; }
 }
 :root[data-effects='off'] .rewind { display: none; }
 @media (prefers-reduced-motion: reduce) { .rewind { display: none; } }
+
+/* ---------- Motion ----------
+   Chunky, stepped moves to match the cabinet. All of it stops under "Reduce effects" and the OS reduced-motion
+   setting (styles/base.css); script-driven motion lives in ui/motion.ts and checks the same switches. */
+
+/* Round start: the four answers drop in, A to D. */
+.deal-in > * { animation: drop-in 0.32s steps(4, end) backwards; }
+.deal-in > :nth-child(2) { animation-delay: 80ms; }
+.deal-in > :nth-child(3) { animation-delay: 160ms; }
+.deal-in > :nth-child(4) { animation-delay: 240ms; }
+@keyframes drop-in {
+  0% { opacity: 0; transform: translateY(-18px); }
+  70% { opacity: 1; transform: translateY(3px); }
+  100% { transform: none; }
+}
+
+/* While the clip plays the waveform bounces like an equalizer; each bar is offset by its index (--i). */
+.waveform--live .waveform__bar {
+  transform-origin: bottom;
+  animation: eq 0.84s steps(3, end) infinite alternate;
+  animation-delay: calc(var(--i) * -0.13s);
+}
+@keyframes eq {
+  from { transform: scaleY(0.45); }
+  to { transform: scaleY(1); }
+}
+
+/* Last seconds: the time segments blink. */
+.timer--urgent .timer__seg--on,
+.timer--urgent .timer__value { animation: blink 0.5s steps(2) infinite; }
+
+/* Locking in an answer punches the button. */
+.answer-button--picked,
+.answer-tile--picked { animation: punch 0.24s steps(3, end); }
+@keyframes punch {
+  0% { transform: scale(0.94); }
+  60% { transform: scale(1.03); }
+  100% { transform: none; }
+}
+
+/* Reveal: the right answer flashes in its own color; a wrong pick shakes. */
+.answer-tile--wrong { animation: shake 0.42s steps(6, end); }
+.answer-tile--correct { animation: correct-flash 0.9s steps(1, end); }
+@keyframes correct-flash {
+  0%, 40%, 80% { background: color-mix(in srgb, var(--answer) 35%, transparent); }
+  20%, 60%, 100% { background: transparent; }
+}
+
+/* The verdict word pops for a hit and shakes for a miss; the breakdown rows tick in after it. */
+.verdict__word--correct { animation: pop 0.4s steps(4, end); }
+.verdict__word--wrong,
+.verdict__word--none { animation: shake 0.42s steps(6, end); }
+@keyframes pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.18); opacity: 1; }
+  100% { transform: none; }
+}
+@keyframes shake {
+  0%, 100% { transform: none; }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+.breakdown__row { animation: tick-in 0.2s steps(2, end) backwards; }
+.breakdown__row:nth-child(1) { animation-delay: 0.45s; }
+.breakdown__row:nth-child(2) { animation-delay: 0.6s; }
+.breakdown__row:nth-child(3) { animation-delay: 0.75s; }
+.breakdown__row:nth-child(4) { animation-delay: 0.9s; }
+@keyframes tick-in {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: none; }
+}
+.breakdown__value--streak { animation: pop 0.4s steps(4, end) 0.9s backwards; }
+
+/* Scores and streaks bump when they change (these elements are keyed by their value). */
+.tv-header__code,
+.player-card__value--score,
+.player-card__label--streak,
+.hiscore__extra--gain,
+.hiscore__extra--streak { display: inline-block; animation: bump 0.3s steps(3, end); }
+@keyframes bump {
+  0% { transform: scale(1.35); }
+  100% { transform: none; }
+}
+
+/* Lobby: a player joining pops onto the host's list. */
+.host-players__row { animation: pop 0.3s steps(4, end); }
+
+/* Game over: the final board fills in from the top, and the winner flashes. */
+.final-board__row { animation: tick-in 0.2s steps(2, end) backwards; }
+.final-board__row:nth-child(2) { animation-delay: 0.12s; }
+.final-board__row:nth-child(3) { animation-delay: 0.24s; }
+.final-board__row:nth-child(4) { animation-delay: 0.36s; }
+.final-board__row:nth-child(5) { animation-delay: 0.48s; }
+.final-board__row:nth-child(n + 6) { animation-delay: 0.6s; }
+.final-board__row:first-child { animation: tick-in 0.2s steps(2, end) backwards, blink 0.4s steps(2) 0.3s 4; }
+
+/* Menus: the cursor on the chosen item blinks like an arcade select screen. */
+.menu-item--on .menu-item__cursor,
+.tv-menu__item--primary .tv-menu__cursor,
+.tv-menu__item:hover .tv-menu__cursor { animation: blink 0.8s steps(2) infinite; }

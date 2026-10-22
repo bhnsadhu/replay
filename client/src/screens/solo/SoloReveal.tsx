@@ -26,7 +26,8 @@ const revealSeconds = REVEAL_MS / 1000;
 
 function tileState(letter: Letter, reveal: Reveal, you: YourResult): AnswerState {
   if (letter === reveal.correct) return 'correct';
-  if (letter === you.choice) return 'picked';
+  // Not 'picked': a picked D glows green, which would read as correct.
+  if (letter === you.choice) return 'wrong';
   return 'dimmed';
 }
 
@@ -37,13 +38,18 @@ export function SoloRevealDesktop({ round, reveal, streakBefore, secondsToNext }
 
   return (
     <TvStage>
-      <TvHeader status="pause" context={`ROUND ${pad2(round.index)} / ${round.total}`} rightLabel="SCORE" rightValue={String(you.score)} />
+      <TvHeader status="ff" context={`ROUND ${pad2(round.index)} / ${round.total}`} rightLabel="SCORE" rightValue={String(you.score)} />
       <div className="tv-body">
         <div className="tv-main">
           <RevealHero reveal={reveal} />
           <div className="answer-grid answer-grid--compact">
             {round.options.map((option) => (
-              <AnswerTile key={option.letter} option={option} state={tileState(option.letter, reveal, you)} />
+              <AnswerTile
+                key={option.letter}
+                option={option}
+                state={tileState(option.letter, reveal, you)}
+                tag={option.letter === reveal.correct ? 'CORRECT' : option.letter === you.choice ? 'YOUR PICK' : undefined}
+              />
             ))}
           </div>
         </div>
@@ -65,7 +71,10 @@ export function RevealHero({ reveal }: { reveal: Reveal }) {
       <div className="reveal-hero__text">
         <span className="reveal-hero__eyebrow">IT WAS</span>
         <span className="reveal-hero__title">{reveal.track.title}</span>
-        <span className="reveal-hero__artist">{reveal.track.artist}</span>
+        <span className="reveal-hero__artist">
+          {reveal.track.artist}
+          {reveal.track.year ? ` · ${reveal.track.year}` : ''}
+        </span>
       </div>
       <div className="reveal-hero__tracking" aria-hidden="true" />
     </div>
@@ -82,7 +91,7 @@ export function SoloRevealPhone(props: PhoneProps) {
 
   return (
     <Phone>
-      <PhoneTopRow context={context} status="pause" />
+      <PhoneTopRow context={context} status="ff" />
       <PlayerCard
         label={player.label}
         initials={player.initials}

@@ -1,6 +1,9 @@
+import { useRef, type CSSProperties } from 'react';
 import type { AnswerOption, Letter } from '@replay/shared';
+import { useRankMotion } from './motion';
 
-export type AnswerState = 'idle' | 'picked' | 'dimmed' | 'correct';
+/** 'wrong' is a reveal-only state: the answer this player picked, which wasn't it. */
+export type AnswerState = 'idle' | 'picked' | 'dimmed' | 'correct' | 'wrong';
 
 interface AnswerButtonProps {
   option: AnswerOption;
@@ -85,11 +88,17 @@ interface SegmentTimerProps {
   size: 'tv' | 'phone';
   label?: string;
   value?: string;
+  /** Blink: time is nearly up. */
+  urgent?: boolean;
 }
 
-export function SegmentTimer({ lit, total = 20, size, label, value }: SegmentTimerProps) {
+export function SegmentTimer({ lit, total = 20, size, label, value, urgent = false }: SegmentTimerProps) {
   return (
-    <div className={`timer timer--${size}`} role="timer" aria-label={value ? `${value} seconds left` : undefined}>
+    <div
+      className={urgent ? `timer timer--${size} timer--urgent` : `timer timer--${size}`}
+      role="timer"
+      aria-label={value ? `${value} seconds left` : undefined}
+    >
       {label && <span className="timer__label">{label}</span>}
       <div className="timer__bar">
         {Array.from({ length: total }, (_, i) => (
@@ -108,12 +117,17 @@ export function waveformBars(count: number): number[] {
   );
 }
 
-export function Waveform({ bars, progress }: { bars: number[]; progress: number }) {
+/** `live` makes the bars bounce like an equalizer while the clip plays. */
+export function Waveform({ bars, progress, live = false }: { bars: number[]; progress: number; live?: boolean }) {
   const played = Math.round(bars.length * progress);
   return (
-    <div className="waveform" aria-hidden="true">
+    <div className={live ? 'waveform waveform--live' : 'waveform'} aria-hidden="true">
       {bars.map((h, i) => (
-        <span key={i} className={i < played ? 'waveform__bar waveform__bar--on' : 'waveform__bar'} style={{ height: h }} />
+        <span
+          key={i}
+          className={i < played ? 'waveform__bar waveform__bar--on' : 'waveform__bar'}
+          style={{ height: h, '--i': i } as CSSProperties}
+        />
       ))}
     </div>
   );
@@ -130,12 +144,14 @@ export interface ScoreRow {
 }
 
 export function HiScoreBox({ title, rows, footer }: { title: string; rows: ScoreRow[]; footer?: ScoreRow }) {
+  const listRef = useRef<HTMLOListElement>(null);
+  useRankMotion(title, listRef, rows.map((row) => [row.initials, row.rank]));
   return (
     <section className="hiscore" aria-label={title}>
       <h2 className="hiscore__title display">{title}</h2>
-      <ol className="hiscore__rows">
+      <ol className="hiscore__rows" ref={listRef}>
         {rows.map((row) => (
-          <HiScoreRow key={row.rank} row={row} />
+          <HiScoreRow key={row.initials} row={row} />
         ))}
       </ol>
       {footer && (
@@ -149,11 +165,14 @@ export function HiScoreBox({ title, rows, footer }: { title: string; rows: Score
 
 function HiScoreRow({ row }: { row: ScoreRow }) {
   return (
-    <li className={`hiscore__row hiscore__row--${row.tone ?? 'normal'} num`}>
+    <li className={`hiscore__row hiscore__row--${row.tone ?? 'normal'} num`} data-key={row.initials} data-rank={row.rank}>
       <span>{row.rank}</span>
       <span>{row.initials}</span>
       <span className="hiscore__score">{row.score}</span>
-      <span className={`hiscore__extra hiscore__extra--${row.extraTone ?? 'dim'}`}>{row.extra ?? ''}</span>
+      {/* Keyed by its text so a new gain or streak pops in. */}
+      <span key={row.extra ?? ''} className={`hiscore__extra hiscore__extra--${row.extraTone ?? 'dim'}`}>
+        {row.extra ?? ''}
+      </span>
     </li>
   );
 }
