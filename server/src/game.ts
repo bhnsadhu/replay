@@ -18,7 +18,7 @@ import { newClipId, storeClip } from './audio';
 import { downloadPreview, trackDetail } from './music/deezer';
 import { loadMix } from './music/mixes';
 import { buildQuestion, type PoolTrack, type Question } from './music/question';
-import { areRelated } from './music/related';
+import { areRelated, hitsBy } from './music/artists';
 
 export interface GameSettings {
   mix: MixId;
@@ -68,6 +68,7 @@ const MAX_PREPARE_ATTEMPTS = 5;
 export class Game {
   private pool: PoolTrack[] = [];
   private readonly used = new Set<number>();
+  private readonly shown = new Set<number>();
   private readonly timers = new Set<NodeJS.Timeout>();
   private readonly stats = new Map<string, PlayerStats>();
   private next: Promise<PreparedRound | null> | null = null;
@@ -206,18 +207,19 @@ export class Game {
 
   private async prepare(): Promise<PreparedRound | null> {
     for (let attempt = 0; attempt < MAX_PREPARE_ATTEMPTS; attempt++) {
-      const question = buildQuestion(this.pool, this.used, Math.random, areRelated);
+      const question = buildQuestion(this.pool, this.used, { related: areRelated, hitsBy, shown: this.shown });
       if (!question) return null;
       this.used.add(question.answer.id);
+      for (const t of question.wrong) this.shown.add(t.id);
       try {
         const detail = await trackDetail(question.answer.id);
         if (!detail.preview) continue;
         const audio = await downloadPreview(detail.preview);
         const roundId = newClipId();
         storeClip(roundId, audio);
-        // Deezer's release_date is the year of the album version (often a remaster or compilation),
-        // not the original release, so it would show wrong years. Left out until there's a reliable source.
-        return { roundId, question, track: { title: question.answer.title, artist: question.answer.artist, year: null } };
+        // The pool's year, not Deezer's release_date (often a remaster or compilation year).
+        const { title, artist, year } = question.answer;
+        return { roundId, question, track: { title, artist, year } };
       } catch (err) {
         console.warn('[game] skipping track', question.answer.id, err instanceof Error ? err.message : err);
       }

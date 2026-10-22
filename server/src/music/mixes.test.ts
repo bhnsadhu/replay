@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { inEra } from './mixes';
+import { toHits } from './artists';
 import { baseTitle, primaryArtist, songKey } from './names';
 import { pickMatch, recentSongs } from './today';
 import type { DeezerTrack } from './deezer';
@@ -91,5 +92,29 @@ describe('pickMatch', () => {
     expect(pickMatch(song, [track({ artist: { id: 11, name: 'Zach Top' } })])).toBeNull();
     expect(pickMatch(song, [track({ title_short: 'Lies Lies Lies' })])).toBeNull();
     expect(pickMatch(song, [track({ preview: '' })])).toBeNull();
+  });
+});
+
+describe('toHits', () => {
+  const t = (id: number, title: string, extra: Partial<DeezerTrack> = {}): DeezerTrack => ({
+    id,
+    title_short: title,
+    preview: '',
+    explicit_lyrics: false,
+    artist: { id: 27, name: 'Daft Punk' },
+    ...extra,
+  });
+
+  it("keeps the artist's own songs, once per title, without live takes or remixes", () => {
+    const hits = toHits(27, [
+      t(1, 'One More Time'),
+      t(2, 'Get Lucky', { title_version: '(Radio Edit - feat. Pharrell Williams)' }),
+      t(3, 'Get Lucky', { title_version: '(feat. Pharrell Williams)' }),
+      t(4, 'Around the World', { title_version: '(Live)' }),
+      t(5, 'Something About Us (Remix)'),
+      t(6, 'Collab', { artist: { id: 99, name: 'Someone Else' } }),
+      t(7, 'Veridis Quo'),
+    ]);
+    expect(hits.map((h) => h.title)).toEqual(['One More Time', 'Get Lucky', 'Veridis Quo']);
   });
 });

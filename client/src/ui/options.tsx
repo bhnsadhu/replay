@@ -85,8 +85,9 @@ function OptionsSheet({ config, onClose }: { config: OptionsConfig; onClose: () 
         <div className="phone-top">
           <span>{config.context}</span>
           <span className="phone-top__right">
+            {/* No ❚❚: opening options doesn't pause the game (only the host's PAUSE does). */}
             <span className="phone-top__status" id="options-title">
-              ❚❚ OPTIONS
+              OPTIONS
             </span>
             <button type="button" className="icon-button" aria-label="Close options" onClick={onClose}>
               ✕

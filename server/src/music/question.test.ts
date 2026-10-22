@@ -21,12 +21,11 @@ const pool: PoolTrack[] = Array.from({ length: 12 }, (_, i) => ({
 }));
 
 describe('buildQuestion', () => {
-  it('returns 4 options with distinct artists and titles, including the answer', () => {
-    const q = buildQuestion(pool, new Set(), seeded(1));
+  it('returns 4 options with distinct titles, including the answer', () => {
+    const q = buildQuestion(pool, new Set(), { rng: seeded(1) });
     expect(q).not.toBeNull();
     const { options, correct, answer } = q!;
     expect(options.map((o) => o.letter)).toEqual(['A', 'B', 'C', 'D']);
-    expect(new Set(options.map((o) => o.artist)).size).toBe(4);
     expect(new Set(options.map((o) => o.title)).size).toBe(4);
     const right = options.find((o) => o.letter === correct)!;
     expect(right.title).toBe(answer.title);
@@ -36,18 +35,18 @@ describe('buildQuestion', () => {
   it('never repeats a used track as the answer', () => {
     const used = new Set<number>();
     for (let i = 0; i < pool.length; i++) {
-      const q = buildQuestion(pool, used, seeded(i + 7));
+      const q = buildQuestion(pool, used, { rng: seeded(i + 7) });
       expect(q).not.toBeNull();
       expect(used.has(q!.answer.id)).toBe(false);
       used.add(q!.answer.id);
     }
-    expect(buildQuestion(pool, used, seeded(99))).toBeNull();
+    expect(buildQuestion(pool, used, { rng: seeded(99) })).toBeNull();
   });
 
   it('avoids past answers as wrong options when there are enough fresh songs', () => {
     const used = new Set([1, 2, 3]);
     for (let seed = 0; seed < 50; seed++) {
-      const q = buildQuestion(pool, used, seeded(seed))!;
+      const q = buildQuestion(pool, used, { rng: seeded(seed) })!;
       const ids = q.options.map((o) => pool.find((t) => t.title === o.title)!.id);
       expect(ids.some((id) => used.has(id))).toBe(false);
     }
@@ -56,13 +55,13 @@ describe('buildQuestion', () => {
   it('spreads the correct letter across A–D', () => {
     const rng = seeded(42);
     const counts = { A: 0, B: 0, C: 0, D: 0 };
-    for (let i = 0; i < 400; i++) counts[buildQuestion(pool, new Set(), rng)!.correct]++;
+    for (let i = 0; i < 400; i++) counts[buildQuestion(pool, new Set(), { rng: rng })!.correct]++;
     for (const n of Object.values(counts)) expect(n).toBeGreaterThan(60);
   });
 
-  it('returns null when there are not enough different artists', () => {
-    const tiny = [1, 2, 3, 4].map((id) => ({ id, title: `T${id}`, artist: id < 3 ? 'Same' : 'Other', artistId: id < 3 ? 1 : 2, year: null, genre: null }));
-    expect(buildQuestion(tiny, new Set(), seeded(3))).toBeNull();
+  it('returns null when there are not 4 different titles', () => {
+    const tiny = [1, 2, 3, 4].map((id) => ({ id, title: id < 3 ? 'Same Title' : `T${id}`, artist: `A${id}`, artistId: id, year: null, genre: null }));
+    expect(buildQuestion(tiny, new Set(), { rng: seeded(3) })).toBeNull();
   });
 });
 
@@ -103,7 +102,7 @@ describe('similar wrong options', () => {
 
   it('takes wrong options from the answer’s own scene', () => {
     for (let seed = 0; seed < 100; seed++) {
-      const q = buildQuestion(scenes, new Set(), seeded(seed), related)!;
+      const q = buildQuestion(scenes, new Set(), { rng: seeded(seed), related })!;
       const ids = q.options.map((o) => scenes.find((t) => t.title === o.title)!.artistId);
       expect(new Set(ids.map(scene))).toEqual(new Set([scene(q.answer.artistId)]));
     }
@@ -112,10 +111,76 @@ describe('similar wrong options', () => {
   it('still varies which similar songs appear', () => {
     const seen = new Set<string>();
     for (let seed = 0; seed < 100; seed++) {
-      const q = buildQuestion(scenes, new Set(), seeded(seed), related)!;
+      const q = buildQuestion(scenes, new Set(), { rng: seeded(seed), related })!;
       if (q.answer.id === 1) seen.add(q.options.map((o) => o.title).sort().join());
     }
     expect(seen.size).toBeGreaterThan(1);
+  });
+});
+
+describe('same-artist groups', () => {
+  // 20 artists with one song each in the mix, and 3 more hits each known from Deezer.
+  const mix: PoolTrack[] = Array.from({ length: 20 }, (_, i) => ({
+    id: i + 1,
+    title: `Hit ${i + 1}-0`,
+    artist: `Artist ${i + 1}`,
+    artistId: i + 1,
+    year: 1985,
+    genre: null,
+  }));
+  const hitsBy = (artistId: number): PoolTrack[] =>
+    [1, 2, 3].map((n) => ({ id: artistId * 100 + n, title: `Hit ${artistId}-${n}`, artist: `Artist ${artistId}`, artistId, year: null, genre: null }));
+  const counts = (q: { options: { artist: string }[] }) => {
+    const byArtist = new Map<string, number>();
+    for (const o of q.options) byArtist.set(o.artist, (byArtist.get(o.artist) ?? 0) + 1);
+    return byArtist;
+  };
+
+  it('groups at most 3 songs per artist, all with different titles, and answers only from the mix', () => {
+    for (let seed = 0; seed < 300; seed++) {
+      const q = buildQuestion(mix, new Set(), { rng: seeded(seed), hitsBy })!;
+      expect(Math.max(...counts(q).values())).toBeLessThanOrEqual(3);
+      expect(new Set(q.options.map((o) => o.title)).size).toBe(4);
+      expect(mix).toContain(q.answer);
+    }
+  });
+
+  it('puts the answer in a group as often as a decoy group without it, so groups give nothing away', () => {
+    let answerGrouped = 0;
+    let decoyGrouped = 0;
+    const n = 2000;
+    for (let seed = 0; seed < n; seed++) {
+      const q = buildQuestion(mix, new Set(), { rng: seeded(seed), hitsBy })!;
+      const byArtist = counts(q);
+      const answerInGroup = byArtist.get(q.answer.artist)! > 1;
+      const otherGroup = [...byArtist].some(([artist, c]) => artist !== q.answer.artist && c > 1);
+      if (answerInGroup && !otherGroup) answerGrouped++;
+      if (otherGroup && !answerInGroup) decoyGrouped++;
+    }
+    expect(answerGrouped / n).toBeGreaterThan(0.2);
+    expect(Math.abs(answerGrouped - decoyGrouped) / n).toBeLessThan(0.05);
+  });
+
+  it('rotates wrong options instead of repeating ones already shown this game', () => {
+    const shown = new Set<number>();
+    const used = new Set<number>();
+    let repeats = 0;
+    for (let round = 0; round < 10; round++) {
+      const q = buildQuestion(mix, used, { rng: seeded(round), hitsBy, shown })!;
+      used.add(q.answer.id);
+      for (const t of q.wrong) {
+        if (shown.has(t.id)) repeats++;
+        shown.add(t.id);
+      }
+    }
+    expect(repeats).toBe(0);
+  });
+
+  it('uses four different artists until hits are known', () => {
+    for (let seed = 0; seed < 50; seed++) {
+      const q = buildQuestion(mix, new Set(), { rng: seeded(seed) })!;
+      expect(counts(q).size).toBe(4);
+    }
   });
 });
 

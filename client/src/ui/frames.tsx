@@ -102,11 +102,11 @@ export function OptionsButton({ onClick }: { onClick?: () => void }) {
   );
 }
 
-export function GearIcon() {
+/** A pixel-art gear on a 16×16 grid: 8 teeth around a hole, so it can't be mistaken for a sun. */
+export function GearIcon({ size = 20 }: { size?: number }) {
   return (
-    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" />
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 16 16" fill="currentColor" shapeRendering="crispEdges">
+      <path d="M6 0h4v3h-4zM2 2h2v1h-2zM12 2h2v1h-2zM2 3h12v1h-12zM3 4h10v1h-10zM3 5h3v1h-3zM10 5h3v1h-3zM0 6h5v4h-5zM11 6h5v4h-5zM3 10h3v1h-3zM10 10h3v1h-3zM3 11h10v1h-10zM2 12h12v1h-12zM2 13h2v1h-2zM12 13h2v1h-2zM6 13h4v3h-4z" />
     </svg>
   );
 }

@@ -1,7 +1,7 @@
 import { MIXES, type MixId } from '@replay/shared';
 import { playlistTracks, type DeezerTrack } from './deezer';
 import { toPool, type PoolTrack, type SourceTrack } from './question';
-import { warmRelated } from './related';
+import { warmArtists } from './artists';
 import { todayTracks } from './today';
 import { songKey } from './names';
 import years from './years.json' with { type: 'json' };
@@ -51,7 +51,7 @@ function refresh(mix: MixId): Promise<PoolTrack[]> {
         .map((t) => ({ ...t, year: t.year ?? YEARS[songKey(t.artist, t.title)] ?? null }))
         .filter((t) => !era || inEra(t, era, (key) => YEARS[key]));
       cache.set(mix, { pool, loadedAt: Date.now() });
-      warmRelated(pool.map((t) => t.artistId));
+      warmArtists(pool.map((t) => t.artistId));
       return pool;
     })
     .finally(() => loading.delete(mix));

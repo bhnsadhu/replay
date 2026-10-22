@@ -18,6 +18,8 @@ export interface DeezerTrack {
   /** Present on playlist tracks, missing on chart tracks. */
   readable?: boolean;
   explicit_lyrics: boolean;
+  /** E.g. "(Live)" or "(Radio Edit)". Present on artist top tracks and search results. */
+  title_version?: string;
   artist: { id: number; name: string };
 }
 
@@ -78,6 +80,12 @@ export async function searchTracks(query: string): Promise<DeezerTrack[]> {
 /** Artists Deezer considers similar, most similar first. Waits in the idle lane: nice to have, never urgent. */
 export async function relatedArtists(artistId: number): Promise<{ id: number; name: string }[]> {
   const body = await getJson<{ data: { id: number; name: string }[] }>(`/artist/${artistId}/related?limit=50`, 'idle');
+  return body.data;
+}
+
+/** An artist's most played tracks. Waits in the idle lane. */
+export async function artistTopTracks(artistId: number): Promise<DeezerTrack[]> {
+  const body = await getJson<{ data: DeezerTrack[] }>(`/artist/${artistId}/top?limit=15`, 'idle');
   return body.data;
 }
 
