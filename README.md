@@ -1,3 +1,5 @@
+<p align="center"><img src="client/public/apple-touch-icon.png" width="96" height="96" alt="Replay's pixel R with a pink and cyan split"></p>
+
 # Replay
 
 **Guess the song before your friends do.** A live multiplayer music game with an arcade cabinet look: one screen plays the clip, every phone is a buzzer, and the fastest correct answer scores the most.
@@ -15,7 +17,7 @@
 
 Music quizzes at a party usually mean one person reading questions off a phone, or a trivia app where everyone stares at their own screen. I wanted the feel of a game show: the music in the room, everyone answering at once, and the scoreboard on the TV. It had to start in seconds, with nothing to download and no accounts, and it had to work for friends who are not in the same room.
 
-Inspiration: [Mixtape](https://mixtape-game.fly.dev/), a single global song-guessing station. Replay adds private rooms, a party mode built around one shared screen, remote play, and an arcade identity of its own.
+Inspiration: Mixtape, a single global song-guessing station. Replay adds private rooms, a party mode built around one shared screen, remote play, and an arcade identity of its own.
 
 ## How it plays
 
@@ -91,7 +93,7 @@ flowchart LR
 * Clips come from Deezer's 30 second previews, so song choice is limited to what Deezer offers.
 * There is no real-user data yet, so no engagement numbers are claimed.
 
-## Develop
+## Run it locally
 
 Requires Node 24.
 
@@ -140,3 +142,7 @@ npx tsx scripts/limits.ts         # rate limits
 - Rooms live in server memory: a deploy or restart ends games in progress.
 - Abuse limits (`server/src/limits.ts`) key on Cloudflare's `cf-connecting-ip`; `/health` reports which source it used.
 - A GitHub Actions job pings `/health` every 10 minutes to keep the server awake.
+
+---
+
+Designed and built by me, [Bhanu Sadhu](https://bhanusadhu.com).
