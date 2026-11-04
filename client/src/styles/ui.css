@@ -913,6 +913,18 @@ button.answer-tile { width: 100%; }
 }
 .options-fab:hover,
 .options-fab:focus-visible { opacity: 1; }
+/* The repository button sits just left of the gear, same box, same fade. */
+.repo-fab {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top));
+  right: calc(max(8px, env(safe-area-inset-right)) + var(--touch) + 8px);
+  z-index: 30;
+  background: var(--bg);
+  opacity: 0.6;
+}
+.repo-fab:hover,
+.repo-fab:focus-visible { opacity: 1; }
+.phone-top__right .icon-button + .icon-button { margin-left: 8px; }
 
 /* ---------- Glitch reveal and rewind (M7) ---------- */
 /* The answer arrives like a bad tape: jumps, slices and a wide color split, then settles. */

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { ROOM_CODE_ALPHABET } from '@replay/shared';
-import { Logo, Phone, PhoneTopRow, StatusLine, TvHeader, TvStage } from '../ui/frames';
+import { Logo, Phone, PhoneTopRow, RepoButton, StatusLine, TvHeader, TvStage } from '../ui/frames';
 import { HiScoreBox } from '../ui/game';
 import { useIsPhone } from '../game/clock';
 import { useConnection } from '../net/useConnection';
@@ -134,7 +134,7 @@ function HomePhone() {
   const [joining, setJoining] = useState(false);
   return (
     <Phone>
-      <PhoneTopRow context="HOME" status="play" />
+      <PhoneTopRow context="HOME" status="play" repo />
       <div className="menu-hero">
         <Logo size="phone" />
         <span className="menu-hero__coin display">INSERT COIN</span>
@@ -180,6 +180,7 @@ export function Home() {
   return (
     <OptionsHost config={{ context: 'REPLAY' }} floatingGear={!isPhone}>
       {isPhone ? <HomePhone /> : <HomeTv />}
+      {!isPhone && <RepoButton className="repo-fab" />}
     </OptionsHost>
   );
 }
