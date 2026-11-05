@@ -142,7 +142,3 @@ npx tsx scripts/limits.ts         # rate limits
 - Rooms live in server memory: a deploy or restart ends games in progress.
 - Abuse limits (`server/src/limits.ts`) key on Cloudflare's `cf-connecting-ip`; `/health` reports which source it used.
 - A GitHub Actions job pings `/health` every 10 minutes to keep the server awake.
-
----
-
-Designed and built by me, [Bhanu Sadhu](https://bhanusadhu.com).

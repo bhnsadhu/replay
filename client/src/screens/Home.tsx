@@ -45,15 +45,6 @@ function JoinForm({ size }: { size: 'tv' | 'phone' }) {
   );
 }
 
-/** The cabinet's maker, as an arcade attract screen prints it. */
-function Credit() {
-  return (
-    <a className="credit" href="https://bhanusadhu.com" target="_blank" rel="noreferrer">
-      © 2026 BHANU SADHU
-    </a>
-  );
-}
-
 function useStatusText() {
   const { status, warmingUp } = useConnection();
   if (status === 'online') return { text: 'FREE PLAY', tone: 'good' as const };
@@ -129,9 +120,8 @@ function HomeTv() {
           </aside>
         )}
       </div>
-      <div className="tv-footer tv-footer--home">
+      <div className="tv-footer">
         <span>CLICK TO SELECT</span>
-        <Credit />
         <span className={`tv-footer__status tv-footer__status--${status.tone} display`}>{status.text}</span>
       </div>
     </TvStage>
@@ -181,7 +171,6 @@ function HomePhone() {
         {joining && <JoinForm size="phone" />}
       </div>
       <StatusLine tone={status.tone}>{status.text}</StatusLine>
-      <Credit />
     </Phone>
   );
 }

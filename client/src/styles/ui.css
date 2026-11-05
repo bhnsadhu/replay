@@ -637,12 +637,6 @@ button.answer-tile { width: 100%; }
   color: var(--dim);
 }
 .tv-footer__cta { font-size: 18px; color: var(--yellow); }
-/* Home: prompt, maker, status. Equal outer columns keep the maker on the screen's centre line. */
-.tv-footer--home { display: grid; grid-template-columns: 1fr auto 1fr; }
-.tv-footer--home > :last-child { justify-self: end; }
-.credit { color: var(--dim); text-decoration: none; letter-spacing: 2px; font-size: 18px; }
-.credit:hover, .credit:focus-visible { color: var(--ink); }
-.phone .credit { display: block; text-align: center; font-size: 14px; margin-top: 10px; }
 .tv-footer__status { font-size: 18px; }
 .tv-footer__status--good { color: var(--green); }
 .tv-footer__status--time { color: var(--yellow); }
