@@ -2,142 +2,133 @@
 
 # Replay
 
-**A guess-the-song party game built like an arcade cabinet.** A TV plays a short clip, everyone's phone becomes an A–D button, and the fastest correct answer scores the most.
+**A live guess-the-song game styled as an arcade cabinet: a clip plays, everyone picks A, B, C or D, and the fastest correct answers score most.** Play on a TV with phones as buttons, in a private room with friends on a call, or in one public room.
 
-**[Play it → replay.bhanusadhu.com](https://replay.bhanusadhu.com)** · free, no accounts, works with one phone or eight.
+**[Play it → replay.bhanusadhu.com](https://replay.bhanusadhu.com)** · free, no sign-up, nothing to install
 
-![Demo: a laptop hosts a room and shows code UMLZ, a phone joins with the code, enters the initials ACE and starts the game; both screens show the same four songs, the phone picks B after 3.8 seconds, and the reveal shows The Magic Key with CORRECT +1360](docs/screenshots/demo.gif)
+![A demo of Replay in dark VHS style: the home menu, a TV hosting a room with its code, a phone entering initials, a round with four answers and a segmented timer, then the reveal showing the correct song and +1,360 points](docs/screenshots/demo.gif)
 
 ## The problem
 
-Music trivia at a party usually means one person reading questions off their phone, or an app where everyone stares at their own screen and hears the song at slightly different times. Friends on a video call have it worse: nobody can share a speaker. The fun part, everyone hearing the same three seconds and racing to name it, gets lost.
+Music quiz games are best in a room, and the ones online make you pick between two bad options: a solo game with no one to beat, or a setup that needs an account, an app, or every guest to use the same device. A party needs something a stranger can join in ten seconds from a code, and a call with friends needs the same game with no TV.
 
-The goal: **a room of people playing together within a minute of opening the site, with no app, no sign-up and a fair race.**
+Replay aims for one outcome: **a full game with friends running within a minute of the first person opening the page.**
 
 ## How it works
 
-1. **Host.** A TV or laptop taps HOST A ROOM and shows a four-letter code. That screen plays the music.
-2. **Join.** Phones open the site, type the code (or tap an invite link) and pick three-letter initials. The first phone in becomes the host and sets the rules: 5, 10 or 15 rounds, a 10, 15 or 20 second clip, and a mix (80s, 90s, 2000s, THROWBACKS or TODAY).
-3. **Guess.** A clip plays and four song titles appear. Each phone taps A, B, C or D. Faster correct answers earn more.
-4. **Reveal.** The answer glitches onto the TV, each phone shows its own points, and the leaderboard updates. After the last round come awards and a REPLAY? vote.
+1. **Pick a mode.** *Party*: one TV or laptop shows the game and plays the music while phones are the buttons. *Remote*: a private room where every phone plays the clip. *Public*: one always-on room anyone can drop into. *Solo*: ten rounds on your own.
+2. **Join with a code.** Up to eight players enter a four-letter code and pick three-letter initials, and the first phone in becomes host.
+3. **Guess.** A 15-second clip plays. Pick one of four songs before your friends do, for 1,000 points plus up to 500 for speed and up to 250 for a streak.
+4. **See the reveal.** The song, who picked what and a points breakdown appear, with links to find the track on Spotify or Apple Music.
+5. **Vote to replay.** After ten rounds a majority vote starts another game with the same rules.
 
-No TV? A phone can host a **remote** room where every phone plays the clip, which works for friends on a call. There is also an always-on **public** room and a **solo** mode.
-
-<p align="center">
-  <img src="docs/screenshots/reveal-phone.jpg" height="340" alt="Phone reveal: CORRECT +1360, broken into base 1000, speed 3.8 seconds +310 and streak +50, with links to find the song on Spotify and Apple Music" />
-  &nbsp;
-  <img src="docs/screenshots/round.jpg" height="340" alt="Desktop round: a waveform, WHAT'S THIS TRACK?, four colour-coded answers and a segmented timer" />
-</p>
+![The party-mode lobby on a TV: a large four-letter room code, the join address, game rules, and eight player slots waiting for phones](docs/screenshots/lobby.jpg)
 
 ## Product decisions
 
 | Decision | Trade-off |
 | --- | --- |
-| **The TV is the speaker, phones are the buttons** | Party mode needs a shared screen. In return everyone hears the clip from one speaker at the same instant, so nobody gets a head start from their own device. Remote mode covers groups without one. |
-| **Multiple choice, not typing** | A blind guess has a 1-in-4 chance. But tapping is instant on a phone, nobody loses on spelling, and speed becomes the skill. |
-| **Speed is worth up to half a correct answer** | 1,000 for being right, up to 500 for being fast, up to 250 for a streak. Rewarding speed makes every round tense; capping the streak keeps an early leader from running away. |
-| **Decoys that sound like the answer** | Picking wrong options takes extra lookups for related artists, genres and years. Random decoys made rounds trivial: one rap song among country songs answers itself. |
-| **Three-letter initials, no accounts** | No profiles or history beyond a rolling 24-hour public high score. But joining takes seconds, and it feels like an arcade. A blocklist rejects rude initials. |
-| **Free hosting** | The game server sleeps after 15 idle minutes and takes about a minute to wake. The site says "WAKING THE SERVER" and queues your tap, and a scheduled ping keeps it awake. |
+| **Multiple choice only** | Anyone can play and the server can score instantly, but a typed answer would test knowledge harder and allow more skill. |
+| **Phones are the controller in Party mode** | No app and no accounts, and the TV plays all the sound. Every guest needs a phone with a browser and a signal. |
+| **Three-letter initials, no accounts** | Zero friction and nothing to moderate beyond a short blocklist. There is no identity, so no history and no friends list. |
+| **Music from Deezer's 30-second previews** | No licensing work and no paid API, but only songs with a public preview can appear, and a clip is half of one. |
+| **The server decides everything** | A device cannot fake a score, and a reload cannot desync a room. Rooms live in server memory, so a restart clears them. |
+| **Free hosting on Vercel and Render** | $0, but Render's free server sleeps after 15 minutes idle and takes up to a minute to wake. A warm-up screen and a scheduled ping soften that and do not remove it. |
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-  subgraph dev["Devices"]
+  subgraph devices["Devices"]
     direction LR
-    tv["TV or laptop<br/>shows the game, plays the clip"]
-    ph["Phones<br/>A–D buttons and own score"]
-    tv ~~~ ph
+    tv["TV or laptop<br/>plays the sound"] ~~~ phones["Up to 8 phones<br/>answer buttons"] ~~~ solo["Solo player"]
   end
-  subgraph srv["Game server"]
+  subgraph server["Game server, Node and ws"]
     direction LR
-    ws["WebSocket rooms<br/>state machine, scoring"] --> q["Question generator<br/>answer + 3 close decoys"] --> audio["Audio proxy<br/>random clip URL"]
+    rooms["Room state machine<br/>server decides"] ~~~ q["Question builder"] ~~~ audio["Audio proxy"]
   end
-  subgraph music["Music sources"]
+  subgraph src["Music sources"]
     direction LR
-    deezer["Deezer<br/>playlists, 30 s previews"]
-    apple["Apple Music charts<br/>TODAY mix"]
-    mb["MusicBrainz<br/>release years, cached"]
-    deezer ~~~ apple ~~~ mb
+    deezer["Deezer previews<br/>and charts"] ~~~ mb["MusicBrainz<br/>release years"]
   end
-  dev <-->|"live messages and clips"| srv
-  srv --> music
+  devices --> server
+  server --> src
 ```
 
-The server owns every rule: rounds, timing, scoring and who is host. Rooms live in its memory, and the browsers only render state and send taps. The site runs on Vercel and the game server on Render. Both share one TypeScript package of message types, constants and scoring, so they can't disagree. → [`shared/src`](shared/src)
+The website is a Vite and React app on Vercel. The Node game server on Render holds every room in memory, speaks WebSocket and proxies the clips. The `shared` package holds message types, timings and scoring so the client and server cannot disagree. The room moves from lobby through intro, guessing and reveal for ten rounds, then a replay vote, and pauses if the TV or host drops.
 
 ## Hard problems
 
-**A fair race across devices.** Each phone hears the clip at a slightly different moment, so the server can't time answers from when messages arrive. Each device times its own answer from when its audio actually started. The server accepts that, but never more than **2 s** faster than what it saw itself, and drops guesses after the clip plus 0.5 s. Playtesting found a hole: during the 1.5 s preload the buttons were already live, and a tap counted as a **0.0 s** answer with full speed points. Taps now count only once the clip starts. → [`server/src/game.ts`](server/src/game.ts)
+**Fair scoring over phones with different lag.** Speed counts, so a slow connection must not lose points unfairly or let anyone cheat. Devices sync clocks with a ping and pong, and the server measures answer time itself. A device may claim to be at most **2 seconds** faster than the server saw, a guess counts only once the music has started, and a short grace period covers the clip's end. See [server/src/game.ts](server/src/game.ts).
 
-**Keeping the answer secret.** If a phone knew the track ID it could look up the answer. The server downloads each clip and serves it from `/audio/<random id>`, so nothing in the URL or the four shuffled options says which one is right until the reveal. The proxy supports range requests, which iPhone Safari needs for audio. → [`server/src/audio.ts`](server/src/audio.ts)
+**Rooms that survive real phones.** Phones reload, lose signal and lock their screens. A dropped phone keeps its seat and score for **60 seconds** through a session token, a dropped host keeps the role for 10 seconds, a 12 second server heartbeat notices silent drops, and the game pauses and replays the interrupted round when the TV reconnects. The room closes if the TV stays gone for 60 seconds. Scripts in [server/scripts](server/scripts) drive these cases against a running server.
 
-**Music that fits the mix.** Deezer's editorial "80s Hits" playlists slip in songs from other decades, and its chart was full of decades-old catalog songs. Decade mixes now check each song's original release year on MusicBrainz (**281** songs, cached in `years.json`) and drop off-era ones. TODAY uses Apple Music's most-played charts for the US and UK instead, keeping songs from the last two years, at most 3 per artist. Decoys are scored by closeness: a related artist counts most, then the same genre or a nearby year, with some randomness so the same songs don't keep repeating. → [`server/src/music`](server/src/music)
+**Wrong answers that sound right.** Random wrong options make a round trivial. The question builder in [server/src/music](server/src/music) ranks candidates by how close they are to the answer: a related artist counts most, then the same genre or a nearby year. Decade mixes would otherwise include re-releases, so each song's original release year is looked up on MusicBrainz and songs from the wrong era are dropped.
 
-**Phones that drop.** Reloads, locked screens and bad Wi-Fi are normal at a party. A dropped phone keeps its seat and score for **60 s** using a token stored on the device. A host gets **10 s** before the role passes on. If the TV drops, the room pauses and replays the interrupted round when it returns. A 12 s heartbeat catches connections that die without saying goodbye. → [`server/src/rooms.ts`](server/src/rooms.ts)
+**A free server that falls asleep.** Render puts the server to sleep after 15 minutes without traffic. The site checks `/health` on load and shows a "WARMING UP THE CABINET" screen until it answers, live connections keep the server awake during play, and a scheduled workflow pings it every 10 minutes. That uses about 744 of Render's 750 free hours, so it only fits while Replay is the account's one always-on service.
+
+![A phone showing the reveal after a correct answer: the song title, +1,360 points, a base of 1,000, a speed bonus and a streak bonus, and buttons to find the song on Spotify or Apple Music](docs/screenshots/reveal-phone.jpg)
 
 ## Results
 
-- **65** unit tests. They check the scoring rules against worked examples (7.2 s into a 15 s clip on a 4-answer streak is exactly **+1,460**; a perfect game is capped at **17,500**). They check that the question generator never repeats an answer and spreads the right letter across A–D, that a related artist outranks a nearby year as a decoy, and that the protocol rejects malformed, unknown and oversized messages.
-- **6** scenario scripts that play against a running server over real WebSockets: a full game with 1 TV and 6 phones (one leaves midway) that checks lock-in counts, every phone's result and the sorted final board; drops and resumes; host controls; the replay-vote timeout; the public room; and the rate limits. → [`server/scripts`](server/scripts)
-- **Abuse limits** per IP: 40 open sockets, a token bucket for new connections, joins and audio, and a per-connection message budget that closes a flooding socket. One party of a TV plus 8 phones stays far below all of them. → [`server/src/limits.ts`](server/src/limits.ts)
+- **65 unit tests in 10 files** (Vitest). They cover scoring, the room state machine, message validation, the initials blocklist, abuse limits, the public room, mix and question building, and the on-screen text.
+- **Scoring is deterministic and documented:** a correct answer scores 1,000 plus a speed bonus up to 500 plus a streak bonus up to 250, so a perfect ten-round game is **17,500**.
+- **Six scripts play real games against a running server** with simulated phones: a full room with a TV and six phones, the public room, host controls, the replay vote timer, resilience and abuse limits. They are run by hand, so there is no recorded pass rate.
+- **Abuse limits** are sized so a full party behind one Wi-Fi address (a TV and eight phones reloading together) never reaches them: 40 open sockets per IP and a token bucket on messages, joins and audio requests.
 
-The demo above is a real game on the live site. The phone answered in 3.8 s of a 10 s clip: 1,000 + 310 for speed (500 × (1 − 3.8 ÷ 10)) + 50 for a first-answer streak = **+1,360**, exactly what the reveal shows.
-
-Not measured yet: how many games people finish, how often they vote to replay, and how hard each mix is in practice. There is no analytics.
+**Not measured:** how many people play, how the game holds up with many simultaneous rooms, latency on real mobile networks, and any playtest data. Continuous integration only runs the keep-awake ping, not the tests.
 
 ## How it was built
 
-1. **Plan first.** A written spec covered every screen, rule, message type and milestone before the first line of code, with the arcade look decided from mockups.
-2. **One round, then rooms.** The design system and static screens came first, then a single-player round with real music, then rooms with party and remote modes, the replay vote and the public room.
-3. **Real life breaks things.** Held seats, resume after reload, host handoff and TV pause. The resilience checks were rewritten to hold up over the internet, not just on localhost.
-4. **Shipping for free.** Rate limits, a wake-up screen for the sleeping server, joins queued until the connection is up, and a scheduled ping.
-5. **Playtest fixes.** The 0.0 s speed bug, sound effects measured about **25 dB** under the music on phone speakers, a TODAY mix full of old songs, and decoys that didn't sound like the answer.
+- **Scaffold and design system.** A workspace with a shared package, a `ws` server and a client, then the arcade visual system on the round screens.
+- **One real round.** A single-player round with real music before any multiplayer.
+- **Rooms.** A shared round engine for Party and Remote modes, then the replay vote.
+- **The public room.** An always-on room that runs sets of ten rounds.
+- **Resilience.** Held seats, resume after reloads, heartbeats, TV pause and host controls, each checked with a script.
+- **Hardening and polish.** Rate limits, cold-start handling, link previews, and fixes found by playing it, such as sound effects sitting far below the music and answers counting before the music began.
 
 ## Tech stack
 
 | Layer | Technology |
 | --- | --- |
-| Client | Vite, React, TypeScript, Web Audio |
-| Server | Node.js, `ws` WebSockets, rooms in memory |
-| Shared | One TypeScript package: protocol, constants, scoring |
-| Music | Deezer API (clips), Apple Music charts, MusicBrainz (release years) |
-| Testing | Vitest, WebSocket scenario scripts |
-| Hosting | Vercel Hobby (site), Render free tier (game server), both free |
+| Client | Vite, React, TypeScript, Press Start 2P and VT323 fonts |
+| Server | Node 24, `ws`, an in-memory room state machine |
+| Shared | One TypeScript package with messages, timings and scoring |
+| Music | Deezer public API for previews and charts, MusicBrainz for release years |
+| Testing | Vitest and simulation scripts |
+| Hosting | Vercel Hobby for the site, Render free tier for the server, $0 |
 
 ## Run it locally
 
 ```bash
 npm install
-npm run dev                  # game server + site together; open the URL Vite prints
-npm run check                # typecheck, lint and unit tests
-npm run simulate -w server   # play a full game: 1 TV + 6 phones against the local server
-npm run years -w server      # refresh decade release years from MusicBrainz
+npm run dev                          # server on :8787 and client together
+npm run check                        # typecheck, lint, unit tests
+npm run simulate -w server           # play a full room game with simulated phones
 ```
 
-In production the site reads the game server's address from `VITE_SERVER_URL`, and the server only accepts the origins in `ALLOWED_ORIGINS`. The site deploys from `main` on Vercel; the server is described in `render.yaml`.
+Phones on the same Wi-Fi can join a local game, because development accepts any origin. In production the server accepts only the website's origin (`ALLOWED_ORIGINS`), and the client reads the server address from `VITE_SERVER_URL`.
 
 ## Project structure
 
-```
-shared/src/        # Message types and validation, constants, scoring, room rules, blocklist
-server/src/
-├── rooms.ts       # Room lifecycle: join, seats, host handoff, pause
-├── game.ts        # Rounds, guess timing, reveal, awards
-├── public.ts      # The always-on public room
-├── audio.ts       # Clip proxy with random URLs
-├── limits.ts      # Per-IP and per-connection rate limits
-└── music/         # Deezer, Apple charts, decade filtering, question generator
-server/scripts/    # Scenario scripts against a running server
-client/src/        # Screens, arcade UI components, connection and clock sync, audio
+```text
+shared/   message types, timings, scoring, room rules, initials blocklist
+server/   WebSocket server, room state machine, question builder, audio proxy
+  scripts/  simulation and resilience checks against a running server
+client/   Vite React app: screens, components, networking, audio
+render.yaml   game server on Render's free tier
+PLAN.md       the build plan, rules and design tokens
 ```
 
 ## What's next
 
-Known limits:
-- Rooms live in server memory, so a deploy or restart ends games in progress and clears the public high scores.
-- The free server sleeps; the first visitor after a quiet spell waits up to a minute.
-- Clips are Deezer's 30-second previews, so a song without one can't be used.
+**Known limits**
 
-Next to measure: games finished vs started, replay-vote rate, and the share of correct answers per mix, which would show whether the decoys are too easy or too hard.
+- Rooms live in server memory, so a restart ends them, and "Today's best" in the public room resets on a redeploy.
+- Only songs with a Deezer preview can appear, and the first player after an idle period can still wait for the server to wake.
+- There are no accounts, so no history and no friends list.
+- Tests are not run automatically on push.
+
+**Next:** run the tests and simulation scripts in CI, measure latency and room capacity under load, and playtest with real groups.
+
+[Build plan](PLAN.md)
