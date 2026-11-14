@@ -2,6 +2,8 @@
 
 const API = 'https://api.deezer.com';
 const TIMEOUT_MS = 8000;
+/** A 30-second MP3 preview fits comfortably below this, including at 320 kbps. */
+const MAX_PREVIEW_BYTES = 2 * 1024 * 1024;
 /**
  * Deezer allows ~50 requests per 5 seconds per IP. Background lookups start at most one per this gap, so a game's own
  * requests always have headroom.
@@ -93,6 +95,46 @@ export function trackDetail(trackId: number): Promise<DeezerTrackDetail> {
 
 export async function downloadPreview(url: string): Promise<Buffer> {
   const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
-  if (!res.ok) throw new Error(`Preview download failed: HTTP ${res.status}`);
-  return Buffer.from(await res.arrayBuffer());
+  const type = res.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
+  const length = Number(res.headers.get('content-length'));
+  if (!res.ok || (type && !['audio/mpeg', 'audio/mp3', 'application/octet-stream'].includes(type)) || length > MAX_PREVIEW_BYTES) {
+    await res.body?.cancel();
+    throw new Error(`Preview download rejected: HTTP ${res.status}, type ${type ?? 'unknown'}, length ${length}`);
+  }
+  if (!res.body) throw new Error('Preview download was empty');
+  const reader = res.body.getReader();
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > MAX_PREVIEW_BYTES) throw new Error('Preview download exceeded the size limit');
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+  const audio = Buffer.concat(chunks, bytes);
+  if (!hasMp3Header(audio)) throw new Error('Preview did not contain MP3 audio');
+  return audio;
+}
+
+/** Check the first MPEG frame, allowing an ID3 tag before it. This is not a full audio decoder. */
+function hasMp3Header(audio: Buffer): boolean {
+  if (audio.length < 4096) return false;
+  let offset = 0;
+  if (audio.toString('ascii', 0, 3) === 'ID3') {
+    const size = audio.subarray(6, 10);
+    if (size.some((byte) => byte > 127)) return false;
+    offset = 10 + size.reduce((total, byte) => total * 128 + byte, 0);
+    if (audio[3] === 4 && (audio[5]! & 0x10)) offset += 10; // ID3v2.4 footer.
+  }
+  if (offset + 4 > audio.length) return false;
+  const b1 = audio[offset + 1]!;
+  const b2 = audio[offset + 2]!;
+  return audio[offset] === 0xff && (b1 & 0xe0) === 0xe0 && (b1 & 0x18) !== 0x08 &&
+    (b1 & 0x06) === 0x02 && (b2 >> 4) > 0 && (b2 >> 4) < 15 && (b2 & 0x0c) !== 0x0c;
 }

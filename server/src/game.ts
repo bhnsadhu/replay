@@ -213,7 +213,7 @@ export class Game {
       for (const t of question.wrong) this.shown.add(t.id);
       try {
         const detail = await trackDetail(question.answer.id);
-        if (!detail.preview) continue;
+        if (!detail.preview || detail.readable === false) continue;
         const audio = await downloadPreview(detail.preview);
         const roundId = newClipId();
         storeClip(roundId, audio);

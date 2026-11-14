@@ -112,6 +112,12 @@ async function main(): Promise<void> {
   for (let r = 1; r <= rounds; r++) {
     const start = await tv.got('roundStart', (m) => m.index === r);
     check(start.index === r && start.durationMs === 10_000, `round ${r} started (10s clip)`);
+    const audioUrl = new URL(start.audioPath, url.replace(/^ws/, 'http'));
+    const clip = await fetch(audioUrl, { signal: AbortSignal.timeout(10_000) });
+    const bytes = await clip.arrayBuffer();
+    check(clip.ok && clip.headers.get('content-type') === 'audio/mpeg' && bytes.byteLength >= 4096, `round ${r}: audio download is available`);
+    const range = await fetch(audioUrl, { headers: { range: 'bytes=0-1' }, signal: AbortSignal.timeout(10_000) });
+    check(range.status === 206 && (await range.arrayBuffer()).byteLength === 2, `round ${r}: audio range requests work`);
     const active = phones.filter((p) => p.ws.readyState === WebSocket.OPEN);
     if (r === 3) {
       log('P6 disconnects mid-game');

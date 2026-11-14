@@ -12,10 +12,14 @@ Each mix refreshes on demand after an hour. A refresh must produce at least 20 u
 
 The cache is in memory. A fresh deployment needs working sources to load its first selection; there is no saved fallback presented as a live chart. `/health` remains a server liveness check and includes per-mix `ready`, `tracks`, `loadedAt` and `refreshing` fields, plus Render's deployed commit as `revision`. A live process can therefore report `ok: true` while a music source is still warming or unavailable.
 
+## Clip delivery
+
+Each round refreshes the selected track's preview URL and checks that it is still readable. Downloads have an eight-second timeout and a 2 MiB size cap, including streamed responses without a content length. The response must have an audio or generic binary type and contain an MP3 frame after any ID3 tag. This detects empty bodies, HTML error pages and obviously invalid responses; it does not fully decode the recording. A rejected clip is skipped using the game's existing five-attempt preparation limit.
+
 ## Provider choices
 
-These requests use the existing public feeds and public Deezer endpoints without a new paid service or API key. Spotify is not a source: its [developer policy](https://developer.spotify.com/policy) excludes games, including trivia quizzes. Apple's [RSS generator](https://rss.marketingtools.apple.com/) supplies the chart feed URLs. This setup does not confer additional music licensing rights.
+These requests use the existing public feeds and public Deezer endpoints without a new paid service or API key. Spotify is not a source: its [developer policy](https://developer.spotify.com/policy) excludes games, including trivia quizzes. Apple's [RSS generator](https://rss.marketingtools.apple.com/) supplies the chart feed URLs.
 
 ## Checks
 
-`npm run check` covers feed freshness, matching, partial playlist failures, cache retention, retry backoff and expired selections alongside the game tests. `npm run simulate -w server -- ws://localhost:8787/ws` plays a five-round TODAY game with one TV and six simulated phones against a running server and real music sources.
+`npm run check` covers feed freshness, matching, partial playlist failures, cache retention, retry backoff, expired selections and invalid audio responses alongside the game tests. `npm run simulate -w server -- ws://localhost:8787/ws` plays a five-round TODAY game with one TV and six simulated phones against a running server and real music sources. Each round checks its audio download and a byte-range response, the path used by mobile Safari.
