@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { inEra } from './mixes';
+import { fromPlaylists, inEra } from './mixes';
 import { toHits } from './artists';
 import { baseTitle, primaryArtist, songKey } from './names';
-import { pickMatch, recentSongs } from './today';
+import { chartSongs, pickMatch, recentSongs } from './today';
 import type { DeezerTrack } from './deezer';
 
 describe('names', () => {
@@ -70,6 +70,33 @@ describe('recentSongs', () => {
     );
     expect(songs.map((s) => s.title)).toEqual(['A', 'B', 'C']);
   });
+
+  it('rejects future releases, invalid dates and empty song names', () => {
+    expect(recentSongs([
+      { artist: 'Artist', title: 'Unreleased', releaseDate: '2027-01-01' },
+      { artist: 'Artist', title: 'Invalid', releaseDate: 'not-a-date' },
+      { artist: 'Artist', title: '', releaseDate: '2026-01-01' },
+      { artist: '', title: 'No artist', releaseDate: '2026-01-01' },
+    ], now)).toEqual([]);
+  });
+});
+
+describe('chart feeds', () => {
+  const now = Date.parse('2026-11-14T12:00:00Z');
+  const song = { artistName: 'Artist', name: 'Song', releaseDate: '2026-11-01', genres: [{ name: 'Music' }, { name: 'Pop' }] };
+
+  it('reads current feeds and skips malformed rows', () => {
+    expect(chartSongs({ feed: { updated: new Date(now).toISOString(), results: [song, null, { name: 'Missing artist' }] } }, now))
+      .toEqual([{ artist: 'Artist', title: 'Song', releaseDate: '2026-11-01', genre: 'Pop' }]);
+  });
+
+  it('rejects stale, undated and future feeds', () => {
+    for (const updated of ['2026-11-10', '2026-11-15', 'invalid', undefined]) {
+      expect(() => chartSongs({ feed: { updated, results: [song] } }, now)).toThrow('recent update date');
+    }
+    expect(() => chartSongs(null, now)).toThrow('recent update date');
+    expect(() => chartSongs({ feed: { updated: new Date(now).toISOString() } }, now)).toThrow('no song list');
+  });
 });
 
 describe('pickMatch', () => {
@@ -92,6 +119,38 @@ describe('pickMatch', () => {
     expect(pickMatch(song, [track({ artist: { id: 11, name: 'Zach Top' } })])).toBeNull();
     expect(pickMatch(song, [track({ title_short: 'Lies Lies Lies' })])).toBeNull();
     expect(pickMatch(song, [track({ preview: '' })])).toBeNull();
+    expect(pickMatch(song, [track({ readable: false })])).toBeNull();
+  });
+
+  it('skips live takes and remixes even if the base title is identical', () => {
+    expect(pickMatch(song, [
+      track({ id: 1, title_version: '(Live)' }),
+      track({ id: 2, title: 'Lies (Dance Remix)' }),
+      track({ id: 4, title: 'Lies', title_version: '(Live)' }),
+      track({ id: 3, title_version: '(2017 Remaster)' }),
+    ])?.id).toBe(3);
+  });
+
+  it('keeps the charted remix only when the recording title also matches', () => {
+    const remix = { ...song, title: 'Lies (Dance Remix)' };
+    expect(pickMatch(remix, [track({ id: 1 }), track({ id: 2, title_version: '(Dance Remix)' })])?.id).toBe(2);
+    expect(pickMatch({ ...song, title: 'Lies (Live)' }, [track({})])).toBeNull();
+  });
+});
+
+describe('decade sources', () => {
+  const track: DeezerTrack = { id: 1, title_short: 'Africa', preview: 'https://cdn/clip.mp3', explicit_lyrics: false, artist: { id: 2, name: 'Toto' } };
+
+  it('uses the healthy playlist when its companion fails', async () => {
+    expect(await fromPlaylists([1, 2], async (id) => {
+      if (id === 1) throw new Error('unavailable');
+      return [track];
+    })).toEqual([track]);
+  });
+
+  it('rejects an entirely unavailable or empty decade', async () => {
+    await expect(fromPlaylists([1, 2], async () => { throw new Error('offline'); })).rejects.toThrow('No songs');
+    await expect(fromPlaylists([1, 2], async () => [])).rejects.toThrow('No songs');
   });
 });
 

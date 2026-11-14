@@ -14,6 +14,8 @@ type Lane = 'background' | 'idle';
 export interface DeezerTrack {
   id: number;
   title_short: string;
+  /** Full title including recording labels, when supplied by the API. */
+  title?: string;
   preview: string;
   /** Present on playlist tracks, missing on chart tracks. */
   readable?: boolean;
@@ -63,11 +65,6 @@ async function getJson<T>(path: string, lane?: Lane): Promise<T> {
 
 export async function playlistTracks(playlistId: number): Promise<DeezerTrack[]> {
   const body = await getJson<{ data: DeezerTrack[] }>(`/playlist/${playlistId}/tracks?limit=100`);
-  return body.data;
-}
-
-export async function chartTracks(): Promise<DeezerTrack[]> {
-  const body = await getJson<{ data: DeezerTrack[] }>(`/chart/0/tracks?limit=100`);
   return body.data;
 }
 

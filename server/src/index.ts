@@ -7,7 +7,7 @@ import { serveClip } from './audio';
 import { SoloGame } from './solo';
 import { handleRoomMessage, type Session } from './rooms';
 import { publicRoom } from './public';
-import { warmMixes } from './music/mixes';
+import { musicStatus, warmMixes } from './music/mixes';
 import { LIMITS, TokenBucket, audioLimiter, clientIp, closeConnection, connectLimiter, openConnection, tryLimiter } from './limits';
 
 const httpServer = createServer((req, res) => {
@@ -20,7 +20,13 @@ const httpServer = createServer((req, res) => {
       'cache-control': 'no-store',
     });
     // ipSource says which header the rate limits key on (never the IP itself).
-    res.end(JSON.stringify({ ok: true, serverTime: Date.now(), ipSource: clientIp(req).source }));
+    res.end(JSON.stringify({
+      ok: true,
+      serverTime: Date.now(),
+      ipSource: clientIp(req).source,
+      revision: process.env.RENDER_GIT_COMMIT ?? null,
+      music: musicStatus(),
+    }));
     return;
   }
 

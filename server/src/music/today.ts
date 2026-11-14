@@ -1,6 +1,6 @@
 // The TODAY mix: Apple Music's most-played charts pick the songs, Deezer supplies the clips.
 // Deezer's own chart is skewed by its small US audience and mixes in decades-old catalog songs.
-import { chartTracks, searchTracks, type DeezerTrack } from './deezer';
+import { searchTracks, type DeezerTrack } from './deezer';
 import type { SourceTrack } from './question';
 import { baseTitle, norm, primaryArtist, songKey } from './names';
 
@@ -10,9 +10,9 @@ const COUNTRIES = ['us', 'gb'];
 const MAX_AGE_MS = 2 * 365 * 24 * 60 * 60 * 1000;
 /** Keeps one superstar from filling the mix. */
 const MAX_PER_ARTIST = 3;
-/** Below this many matches, top up with Deezer's chart rather than run a thin mix. */
-const MIN_TRACKS = 20;
 const TIMEOUT_MS = 8000;
+const MAX_FEED_AGE_MS = 48 * 60 * 60 * 1000;
+const ALT_VERSION = /\b(live|remix|mix|acoustic|instrumental|karaoke|demo|sped|slowed|version|session)\b/i;
 
 export interface ChartSong {
   artist: string;
@@ -21,20 +21,30 @@ export interface ChartSong {
   genre?: string | null;
 }
 
-async function appleChart(country: string): Promise<ChartSong[]> {
+/** Reject broken or stale feeds instead of presenting them as today's chart. */
+export function chartSongs(body: unknown, now: number): ChartSong[] {
+  const feed = (body as { feed?: { updated?: unknown; results?: unknown } } | null)?.feed;
+  const updated = typeof feed?.updated === 'string' ? Date.parse(feed.updated) : NaN;
+  if (!Number.isFinite(updated) || now - updated > MAX_FEED_AGE_MS || updated - now > 5 * 60 * 1000) {
+    throw new Error('Apple chart has no recent update date');
+  }
+  if (!Array.isArray(feed?.results)) throw new Error('Apple chart has no song list');
+  return feed.results.flatMap((row: unknown): ChartSong[] => {
+    if (!row || typeof row !== 'object') return [];
+    const r = row as Record<string, unknown>;
+    if (typeof r.artistName !== 'string' || !r.artistName.trim() || typeof r.name !== 'string' || !r.name.trim() || typeof r.releaseDate !== 'string') return [];
+    const genre = Array.isArray(r.genres)
+      ? r.genres.find((g: unknown): g is { name: string } => !!g && typeof g === 'object' && 'name' in g && typeof g.name === 'string' && g.name !== 'Music')?.name
+      : null;
+    return [{ artist: r.artistName, title: r.name, releaseDate: r.releaseDate, genre: genre ?? null }];
+  });
+}
+
+export async function appleChart(country: string): Promise<ChartSong[]> {
   const url = `https://rss.marketingtools.apple.com/api/v2/${country}/music/most-played/100/songs.json`;
   const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
   if (!res.ok) throw new Error(`Apple chart ${country} failed: HTTP ${res.status}`);
-  const body = (await res.json()) as {
-    feed: { results: { artistName: string; name: string; releaseDate: string; genres?: { name: string }[] }[] };
-  };
-  return body.feed.results.map((r) => ({
-    artist: r.artistName,
-    title: r.name,
-    releaseDate: r.releaseDate,
-    // "Music" is a catch-all Apple adds to every song.
-    genre: r.genres?.find((g) => g.name !== 'Music')?.name ?? null,
-  }));
+  return chartSongs(await res.json(), Date.now());
 }
 
 /** Recent songs only, each once, at most a few per artist, in chart order. */
@@ -45,14 +55,24 @@ export function recentSongs(songs: ChartSong[], now: number): ChartSong[] {
     const artist = norm(primaryArtist(s.artist));
     const key = songKey(artist, s.title);
     const count = perArtist.get(artist) ?? 0;
-    if (seen.has(key) || count >= MAX_PER_ARTIST || !(now - Date.parse(s.releaseDate) <= MAX_AGE_MS)) return false;
+    const age = now - Date.parse(s.releaseDate);
+    if (!artist || !norm(baseTitle(s.title)) || seen.has(key) || count >= MAX_PER_ARTIST || !(age >= 0 && age <= MAX_AGE_MS)) return false;
     seen.add(key);
     perArtist.set(artist, count + 1);
     return true;
   });
 }
 
-/** The Deezer result that is this song: same lead artist and title, playable. Deezer ranks the original version first. */
+/** Alternative recordings need the same full title; a studio hit must not resolve to a live take or remix. */
+function sameRecording(song: ChartSong, track: DeezerTrack): boolean {
+  const suppliedTitle = track.title ?? track.title_short;
+  const version = track.title_version ?? '';
+  const trackTitle = version && !norm(suppliedTitle).includes(norm(version)) ? `${suppliedTitle} ${version}` : suppliedTitle;
+  const annotations = `${song.title.replace(baseTitle(song.title), '')} ${trackTitle.replace(baseTitle(trackTitle), '')} ${track.title_version ?? ''}`;
+  return !ALT_VERSION.test(annotations) || norm(song.title) === norm(trackTitle);
+}
+
+/** The Deezer result that is this song: same lead artist, title and recording, playable. */
 export function pickMatch(song: ChartSong, results: DeezerTrack[]): DeezerTrack | null {
   const artist = norm(primaryArtist(song.artist));
   const title = norm(baseTitle(song.title));
@@ -62,7 +82,8 @@ export function pickMatch(song: ChartSong, results: DeezerTrack[]): DeezerTrack 
         t.preview &&
         t.readable !== false &&
         norm(primaryArtist(t.artist.name)) === artist &&
-        norm(baseTitle(t.title_short)) === title,
+        norm(baseTitle(t.title_short)) === title &&
+        sameRecording(song, t),
     ) ?? null
   );
 }
@@ -88,7 +109,7 @@ export async function todayTracks(): Promise<SourceTrack[]> {
   );
   // Deezer searches run in its background lane, which paces them.
   const found = (await Promise.all(songs.map(findOnDeezer))).filter((t): t is SourceTrack => t !== null);
-  if (found.length >= MIN_TRACKS) return found;
-  console.warn(`[today] only ${found.length} chart songs matched on Deezer; adding Deezer's chart`);
-  return [...found, ...(await chartTracks())];
+  // The mix cache rejects thin results and retains the last good pool during an outage.
+  // Never fill TODAY with Deezer's all-ages chart: those songs may be decades old.
+  return found;
 }
